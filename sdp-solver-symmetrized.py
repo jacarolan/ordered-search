@@ -68,11 +68,9 @@ for t in range(1, q + 1):
     ]
 
 print("Solving SDP")
-
 prob = cp.Problem(cp.Minimize(0),
                   constraints)
 prob.solve(eps=epsilon, solver=cp.CVXOPT)
-
 print("Finished solving!")
 
 # Print whether a solution was found
