@@ -60,11 +60,16 @@ for i in range(1, q):
     constraints += [A[i] + B[i] @ J >> 0]
     constraints += [A[i] - B[i] @ J >> 0]
 
+newConstraints = constraints.copy()
+
 for t in range(1, q + 1):
     Q_t = cp.bmat([[A[t], B[t]], [J @ B[t] @ J, J @ A[t] @ J]])
     Q_t_prev = cp.bmat([[A[t - 1], B[t - 1]], [J @ B[t - 1] @ J, J @ A[t - 1] @ J]])
     constraints += [
         tr_off_diag(Q_t, i) + (-1)**t * tr_off_diag(Q_t, i-N) == tr_off_diag(Q_t_prev, i) + (-1)**t * tr_off_diag(Q_t_prev, i-N) for i in range(1, N)
+    ]
+    newConstraints += [
+
     ]
 
 print("Solving SDP")
