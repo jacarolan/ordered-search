@@ -7,9 +7,8 @@ from matplotlib import pyplot as plt
 N = 6                     # Instance size
 q = 2                     # Number of queries
 epsilon = 1e-8            # Solver precision (default is not high enough)
-plot_polys = False        # Plots analogous to Figure 1 in [arxiv:0608161]
-plot_poly_coeffs = False  # Plots analogous to Figure 2 in [arxiv:0608161]
-# Note that plots will always be saved, flags determined if they are shown
+plot_polys = False        # Plots analogous to Figures 1 and 2 in [arxiv:0608161]
+save_plots = True         # Note that plots are saved only if they are not shown
 
 ############################################################
 ################ Subroutine Definitions ####################
@@ -25,6 +24,17 @@ def tr_off_diag(M, i):
         return np.sum([M[j-i, j] for j in range(N+i)])
     else:
         return np.trace(M)
+    
+    
+# Flip the polynomial coefficients of a laurent polynomial
+def flip_poly(P):
+    d = len(P)
+    mid_d = (d-1) // 2
+    new_coeffs = [0] * d
+    for i in range(mid_d):
+        new_coeffs[i] = P[mid_d - i - 1]
+        new_coeffs[mid_d + 1 + i] = P[d - i - 1]
+    return np.array(new_coeffs)
 
 # Returns a list of values of symmetric laurent polynomial, assumes length of P is odd
 def poly_val(P, xs):
@@ -34,6 +44,15 @@ def poly_val(P, xs):
     for x in xs:
         vals += [sum([P[i] * x**(i-mid_d) for i in range(d)])]
     return np.array(vals)
+
+# Determines whether two polynomials are equal on the unit circle, up to precision eps
+def poly_eq(P1, P2, eps=1e-6):
+    d = len(P1)
+    thetas = np.linspace(0, 2 * np.pi, 1000)
+    vals1 = poly_val(P1, np.exp(1j * thetas))
+    vals2 = poly_val(P2, np.exp(1j * thetas))
+    return np.all(np.abs(vals1 - vals2) < eps)
+
 
 ############################################################
 ###################### SDP Solving #########################
@@ -70,10 +89,30 @@ else:
 
 # Compute the solution polynomials
 P = [[] for _ in range(q + 1)]
+P_rev = [[] for _ in range(q + 1)]
+P_sum = [[] for _ in range(q + 1)]
+P_diff = [[] for _ in range(q + 1)]
 for i in range(1, q):
     Q[i] = Q[i].value
 for i in range(q + 1):
     P[i] = [tr_off_diag(Q[i], j) for j in range(-N+1, N)]
+    P_rev[i] = flip_poly(P[i])
+    P_sum[i] = P[i] + P_rev[i]
+    P_diff[i] = P[i] - P_rev[i]
+
+# Determine equality relations among the polynomials
+# Note that not every equality relation is checked...
+# One could check more things if desired
+for i in range(q + 1):
+    for j in range(i +1, q + 1):
+        if poly_eq(P_sum[i], P_sum[j]):
+            print("P_sum_" + str(i) + " and P_sum_" + str(j) + " are equal")
+        if poly_eq(P_diff[i], P_diff[j]):
+            print("P_diff_" + str(i) + " and P_diff_" + str(j) + " are equal")
+        if poly_eq(P_diff[i], P_sum[j]):
+            print("P_diff_" + str(i) + " and P_sum_" + str(j) + " are equal")
+        if poly_eq(P_sum[i], P_diff[j]):
+            print("P_sum_" + str(i) + " and P_diff_" + str(j) + " are equal")
 
 # Plot the solution polynomials
 thetas = np.linspace(0, 2 * np.pi, N * 6 + 100)
@@ -81,9 +120,11 @@ for i in range(q + 1):
     plt.plot(thetas, poly_val(P[i], np.exp(1j * thetas)), label='P_' + str(i))
 plt.legend()
 fig_name = "SDP_polynomial_values_N=" + str(N) + "_q=" + str(q) + ".png"
+plt.title("SDP_polynomial_values_N=" + str(N) + "_q=" + str(q))
 if plot_polys:
     plt.show()
-plt.savefig("Plots/" + fig_name)
+elif save_plots:
+    plt.savefig("Plots/" + fig_name)
 print("Saving polynomial values plot in Plots/" + fig_name)
 plt.clf()
 
@@ -93,7 +134,53 @@ for i in range(q+1):
     plt.plot(degs, P[i], label='P_' + str(i))
 plt.legend()
 fig_name = "SDP_polynomial_coeffs_N=" + str(N) + "_q=" + str(q) + ".png"
-if plot_poly_coeffs:
+plt.title("SDP_polynomial_coeffs_N=" + str(N) + "_q=" + str(q))
+if plot_polys:
     plt.show()
-plt.savefig("Plots/" + fig_name)
+elif save_plots:
+    plt.savefig("Plots/" + fig_name)
 print("Saving polynomial coefficients plot in Plots/" + fig_name)
+plt.clf()
+
+
+# Plot the solution polynomial reversals
+thetas = np.linspace(0, 2 * np.pi, N * 6 + 100)
+for i in range(q + 1):
+    plt.plot(thetas, poly_val(P_rev[i], np.exp(1j * thetas)), label='P_' + str(i))
+plt.legend()
+fig_name = "SDP_reversed_polynomial_values_N=" + str(N) + "_q=" + str(q) + ".png"
+plt.title("SDP_reversed_polynomial_values_N=" + str(N) + "_q=" + str(q))
+if plot_polys:
+    plt.show()
+elif save_plots:
+    plt.savefig("Plots/" + fig_name)
+print("Saving polynomial values plot in Plots/" + fig_name)
+plt.clf()
+
+# Plot the sum of solution polynomial and their reversals
+thetas = np.linspace(0, 2 * np.pi, N * 6 + 100)
+for i in range(q + 1):
+    plt.plot(thetas, poly_val(P[i] + P_rev[i], np.exp(1j * thetas)), label='P_' + str(i))
+plt.legend()
+fig_name = "SDP_sum_polynomial_values_N=" + str(N) + "_q=" + str(q) + ".png"
+plt.title("SDP_sum_polynomial_values_N=" + str(N) + "_q=" + str(q))
+if plot_polys:
+    plt.show()
+elif save_plots:
+    plt.savefig("Plots/" + fig_name)
+print("Saving polynomial values plot in Plots/" + fig_name)
+plt.clf()
+
+# Plot the difference of solution polynomial and their reversals
+thetas = np.linspace(0, 2 * np.pi, N * 6 + 100)
+for i in range(q + 1):
+    plt.plot(thetas, poly_val(P[i] - P_rev[i], np.exp(1j * thetas)), label='P_' + str(i))
+plt.legend()
+fig_name = "SDP_diff_polynomial_values_N=" + str(N) + "_q=" + str(q) + ".png"
+plt.title("SDP_diff_polynomial_values_N=" + str(N) + "_q=" + str(q))
+if plot_polys:
+    plt.show()
+elif save_plots:
+    plt.savefig("Plots/" + fig_name)
+print("Saving polynomial values plot in Plots/" + fig_name)
+plt.clf()
