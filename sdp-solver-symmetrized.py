@@ -19,6 +19,7 @@ if args.use_new_constraints and args.query_count % 2 == 1:
 if args.instance_size % 2 != 0:
     raise ValueError("This program requires the instance size to be even.")
 
+solver = None
 if args.solver == "SCS":
     solver = cp.SCS
 if args.solver == "MOSEK":
