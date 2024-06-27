@@ -11,6 +11,7 @@ parser.add_argument("instance_size", help="The size of the OSP instance.", type=
 parser.add_argument("--use-new-constraints", help="Add flag to use new set of equality constraints. Note: query count must be even in this case.", action='store_true')
 parser.add_argument("--generate-plots", help="Add flag to generate plots.", action='store_true')
 parser.add_argument("--solver", help="Choose which solver to use.", type=str)
+parser.add_argument("--repeats", help="Number of times the solver should be run for profiling purposes.", type=int)
 args = parser.parse_args()
 
 if args.use_new_constraints and args.query_count % 2 == 1: 
@@ -20,13 +21,19 @@ if args.instance_size % 2 != 0:
     raise ValueError("This program requires the instance size to be even.")
 
 solver = None
-if args.solver == "SCS":
-    solver = cp.SCS
+if args.solver == "CVXOPT":
+    solver = cp.CVXOPT
 if args.solver == "MOSEK":
     solver = cp.MOSEK
-
 if solver == None: 
-    solver = cp.CVXOPT
+    solver = cp.SCS
+
+rep_count = 10
+if args.repeats != None:
+    rep_count = args.repeats
+
+print("Using solver " + str(solver) + ".")
+print("Running solve " + str(rep_count) + " time(s).")
 
 
 # Parameters for the ordered search SDP
@@ -109,7 +116,7 @@ print("Solving SDP")
 prob = cp.Problem(cp.Minimize(0),
                   constraints)
 solve = lambda: prob.solve(eps=epsilon, solver=solver)
-print("Finished. Time elapsed: " + str(timeit.timeit("solve()", globals=globals(), number=10)))
+print("Finished. Time elapsed: " + str(timeit.timeit("solve()", globals=globals(), number=rep_count)))
 
 # Print whether a solution was found
 if prob.value < 2:
