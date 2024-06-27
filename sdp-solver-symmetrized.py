@@ -1,6 +1,6 @@
 # Import packages.
 import argparse
-import time
+import timeit
 import cvxpy as cp
 import numpy as np
 from matplotlib import pyplot as plt
@@ -10,6 +10,7 @@ parser.add_argument("query_count", help="The number of queries.", type=int)
 parser.add_argument("instance_size", help="The size of the OSP instance.", type=int)
 parser.add_argument("--use-new-constraints", help="Add flag to use new set of equality constraints. Note: query count must be even in this case.", action='store_true')
 parser.add_argument("--generate-plots", help="Add flag to generate plots.", action='store_true')
+parser.add_argument("--solver", help="Choose which solver to use.", type=str)
 args = parser.parse_args()
 
 if args.use_new_constraints and args.query_count % 2 == 1: 
@@ -17,6 +18,15 @@ if args.use_new_constraints and args.query_count % 2 == 1:
 
 if args.instance_size % 2 != 0:
     raise ValueError("This program requires the instance size to be even.")
+
+if args.solver == "SCS":
+    solver = cp.SCS
+if args.solver == "MOSEK":
+    solver = cp.MOSEK
+
+if solver == None: 
+    solver = cp.CVXOPT
+
 
 # Parameters for the ordered search SDP
 # THIS CODE ASSUMES EVEN N!!!
@@ -84,7 +94,7 @@ for t in range(1, q + 1):
         if t % 2 == 1: 
             Q_t_next = cp.bmat([[A[t + 1], B[t + 1]], [J @ B[t + 1] @ J, J @ A[t + 1] @ J]])
             constraints += [
-                tr_off_diag(2*Q_t - Q_t_prev - Q_t_next, i) == tr_off_diag(Q_t_prev - Q_t_next, N - i) for i in range(1, N)
+                tr_off_diag(2*Q_t - Q_t_prev - Q_t_next, i) == tr_off_diag(Q_t_prev - Q_t_next, N-i) for i in range(1, N)
             ]
     else:
         constraints += [
@@ -92,13 +102,13 @@ for t in range(1, q + 1):
     ]
 
 
+print("Number of constraints is " + str(len(constraints)))
+
 print("Solving SDP")
-start_time = time.time()
 prob = cp.Problem(cp.Minimize(0),
                   constraints)
-prob.solve(eps=epsilon, solver=cp.CVXOPT)
-print("Finished solving!")
-print("--- %s seconds ---" % (time.time() - start_time))
+solve = lambda: prob.solve(eps=epsilon, solver=solver)
+print("Finished. Time elapsed: " + str(timeit.timeit("solve()", globals=globals(), number=10)))
 
 # Print whether a solution was found
 if prob.value < 2:
