@@ -1,12 +1,27 @@
 # Import packages.
+import argparse
+import time
 import cvxpy as cp
 import numpy as np
 from matplotlib import pyplot as plt
 
+parser = argparse.ArgumentParser()
+parser.add_argument("query_count", help="The number of queries.", type=int)
+parser.add_argument("instance_size", help="The size of the OSP instance.", type=int)
+parser.add_argument("--use-new-constraints", help="Add flag to use new set of equality constraints. Note: query count must be odd in this case.", action='store_true')
+parser.add_argument("--generate-plots", help="Add flag to generate plots.", action='store_true')
+args = parser.parse_args()
+
+if args.use_new_constraints and args.query_count % 2 == 0: 
+    raise ValueError("Query count must be odd when new constraints are used.")
+
+if args.instance_size % 2 != 0:
+    raise ValueError("This program requires the instance size to be even.")
+
 # Parameters for the ordered search SDP
 # THIS CODE ASSUMES EVEN N!!!
-N = 56                    # Instance size (MUST BE EVEN!!!)
-q = 3                     # Number of queries
+N = args.instance_size    # Instance size (MUST BE EVEN!!!)
+q = args.query_count      # Number of queries
 epsilon = 1e-6            # Solver precision (default is not high enough)
 plot_polys = False        # Plots analogous to Figure 1 in [arxiv:0608161]
 plot_poly_coeffs = False  # Plots analogous to Figure 2 in [arxiv:0608161]
@@ -60,23 +75,30 @@ for i in range(1, q):
     constraints += [A[i] + B[i] @ J >> 0]
     constraints += [A[i] - B[i] @ J >> 0]
 
-newConstraints = constraints.copy()
 
 for t in range(1, q + 1):
     Q_t = cp.bmat([[A[t], B[t]], [J @ B[t] @ J, J @ A[t] @ J]])
     Q_t_prev = cp.bmat([[A[t - 1], B[t - 1]], [J @ B[t - 1] @ J, J @ A[t - 1] @ J]])
-    constraints += [
+
+    if args.use_new_constraints: 
+        if t % 2 == 0: 
+            Q_t_next = cp.bmat([[A[t + 1], B[t + 1]], [J @ B[t + 1] @ J, J @ A[t + 1] @ J]])
+            constraints += [
+                tr_off_diag(2*Q_t - Q_t_prev - Q_t_next, i) == tr_off_diag(Q_t_prev - Q_t_next, N - i) for i in range(1, N)
+            ]
+    else:
+        constraints += [
         tr_off_diag(Q_t, i) + (-1)**t * tr_off_diag(Q_t, i-N) == tr_off_diag(Q_t_prev, i) + (-1)**t * tr_off_diag(Q_t_prev, i-N) for i in range(1, N)
     ]
-    newConstraints += [
 
-    ]
 
 print("Solving SDP")
+start_time = time.time()
 prob = cp.Problem(cp.Minimize(0),
                   constraints)
 prob.solve(eps=epsilon, solver=cp.CVXOPT)
 print("Finished solving!")
+print("--- %s seconds ---" % (time.time() - start_time))
 
 # Print whether a solution was found
 if prob.value < 2:
@@ -86,38 +108,39 @@ else:
     exit()
 
 
-Q = [[] for _ in range(q + 1)]
-Q[0] = np.ones((N, N)) / N
-Q[q] = np.eye(N, N) / N
-# Q[i] = np.block([[A[i], B[i]], [J @ B[i] @ J, J @ A[i] @ J]])
+if args.generate_plots:
+    Q = [[] for _ in range(q + 1)]
+    Q[0] = np.ones((N, N)) / N
+    Q[q] = np.eye(N, N) / N
+    # Q[i] = np.block([[A[i], B[i]], [J @ B[i] @ J, J @ A[i] @ J]])
 
-# Compute the solution polynomials
-P = [[] for _ in range(q + 1)]
-for i in range(1, q):
-    # Q[i] = Q[i].value
-    Q[i] = np.block([[A[i].value, B[i].value], [J @ B[i].value @ J, J @ A[i].value @ J]])
-for i in range(q + 1):
-    P[i] = [tr_off_diag(Q[i], j) for j in range(-N+1, N)]
+    # Compute the solution polynomials
+    P = [[] for _ in range(q + 1)]
+    for i in range(1, q):
+        # Q[i] = Q[i].value
+        Q[i] = np.block([[A[i].value, B[i].value], [J @ B[i].value @ J, J @ A[i].value @ J]])
+    for i in range(q + 1):
+        P[i] = [tr_off_diag(Q[i], j) for j in range(-N+1, N)]
 
-# Plot the solution polynomials
-thetas = np.linspace(0, 2 * np.pi, N * 6 + 100)
-for i in range(q + 1):
-    plt.plot(thetas, poly_val(P[i], np.exp(1j * thetas)), label='P_' + str(i))
-plt.legend()
-fig_name = "SDP_polynomial_values_N=" + str(N) + "_q=" + str(q) + ".png"
-if plot_polys:
-    plt.show()
-plt.savefig("Plots/symmetrized/" + fig_name)
-print("Saving polynomial values plot in Plots/symmetrized/" + fig_name)
-plt.clf()
+    # Plot the solution polynomials
+    thetas = np.linspace(0, 2 * np.pi, N * 6 + 100)
+    for i in range(q + 1):
+        plt.plot(thetas, poly_val(P[i], np.exp(1j * thetas)), label='P_' + str(i))
+    plt.legend()
+    fig_name = "SDP_polynomial_values_N=" + str(N) + "_q=" + str(q) + ".png"
+    if plot_polys:
+        plt.show()
+    plt.savefig("Plots/symmetrized/" + fig_name)
+    print("Saving polynomial values plot in Plots/symmetrized/" + fig_name)
+    plt.clf()
 
-# Plot the solution polynomial coefficients
-degs = np.arange(-N+1, N)
-for i in range(q+1):
-    plt.plot(degs, P[i], label='P_' + str(i))
-plt.legend()
-fig_name = "SDP_polynomial_coeffs_N=" + str(N) + "_q=" + str(q) + ".png"
-if plot_poly_coeffs:
-    plt.show()
-plt.savefig("Plots/symmetrized/" + fig_name)
-print("Saving polynomial coefficients plot in Plots/symmetrized/" + fig_name)
+    # Plot the solution polynomial coefficients
+    degs = np.arange(-N+1, N)
+    for i in range(q+1):
+        plt.plot(degs, P[i], label='P_' + str(i))
+    plt.legend()
+    fig_name = "SDP_polynomial_coeffs_N=" + str(N) + "_q=" + str(q) + ".png"
+    if plot_poly_coeffs:
+        plt.show()
+    plt.savefig("Plots/symmetrized/" + fig_name)
+    print("Saving polynomial coefficients plot in Plots/symmetrized/" + fig_name)
