@@ -51,7 +51,7 @@ plot_poly_coeffs = False  # Plots analogous to Figure 2 in [arxiv:0608161]
 
 # Trace of the off-diagonal elements of a matrix
 # In particular, the i-th super-diagonal (or -i-th sub-diagonal) elements are summed
-def tr_off_diag(M, i):
+def tr(M, i):
     N = M.shape[0]
     if i > 0:
         return np.sum([M[j, j+i] for j in range(N-i)])
@@ -85,11 +85,12 @@ B[q] = 0 * I
 # Define and solve the CVXPY problem.
 constraints = []
 for i in range(1, q):
-    A[i] = cp.Variable((N // 2,N // 2), symmetric=True)
+    A[i] = cp.Variable((N // 2, N // 2), symmetric=True)
+    B[i] = cp.Variable((N // 2, N // 2))
+
     constraints += [2 * cp.trace(A[i]) == 1]
-    B[i] = cp.Variable((N // 2,N // 2))
     constraints += [J @ B[i].T @ J == B[i]]
-    # The operator >> denotes matrix inequality.
+
     constraints += [A[i] + B[i] @ J >> 0]
     constraints += [A[i] - B[i] @ J >> 0]
 
@@ -102,11 +103,11 @@ for t in range(1, q + 1):
         if t % 2 == 1: 
             Q_t_next = cp.bmat([[A[t + 1], B[t + 1]], [J @ B[t + 1] @ J, J @ A[t + 1] @ J]])
             constraints += [
-                tr_off_diag(2*Q_t - Q_t_prev - Q_t_next, i) == tr_off_diag(Q_t_prev - Q_t_next, N-i) for i in range(1, N)
+                2*tr(Q_t, i) - tr(Q_t_prev, i) - tr(Q_t_next, i) == tr(Q_t_prev, N-i) - tr(Q_t_next, N-i) for i in range(1, N)
             ]
     else:
         constraints += [
-        tr_off_diag(Q_t, i) + (-1)**t * tr_off_diag(Q_t, i-N) == tr_off_diag(Q_t_prev, i) + (-1)**t * tr_off_diag(Q_t_prev, i-N) for i in range(1, N)
+        tr(Q_t, i) + (-1)**t * tr(Q_t, i-N) == tr(Q_t_prev, i) + (-1)**t * tr(Q_t_prev, i-N) for i in range(1, N)
     ]
 
 
@@ -138,7 +139,7 @@ if args.generate_plots:
         # Q[i] = Q[i].value
         Q[i] = np.block([[A[i].value, B[i].value], [J @ B[i].value @ J, J @ A[i].value @ J]])
     for i in range(q + 1):
-        P[i] = [tr_off_diag(Q[i], j) for j in range(-N+1, N)]
+        P[i] = [tr(Q[i], j) for j in range(-N+1, N)]
 
     if args.use_new_constraints:  
         constr_flag = "_new_constraints" 
