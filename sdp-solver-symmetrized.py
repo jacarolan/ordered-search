@@ -8,11 +8,11 @@ from matplotlib import pyplot as plt
 parser = argparse.ArgumentParser()
 parser.add_argument("query_count", help="The number of queries.", type=int)
 parser.add_argument("instance_size", help="The size of the OSP instance.", type=int)
-parser.add_argument("--use-new-constraints", help="Add flag to use new set of equality constraints. Note: query count must be odd in this case.", action='store_true')
+parser.add_argument("--use-new-constraints", help="Add flag to use new set of equality constraints. Note: query count must be even in this case.", action='store_true')
 parser.add_argument("--generate-plots", help="Add flag to generate plots.", action='store_true')
 args = parser.parse_args()
 
-if args.use_new_constraints and args.query_count % 2 == 0: 
+if args.use_new_constraints and args.query_count % 2 == 1: 
     raise ValueError("Query count must be odd when new constraints are used.")
 
 if args.instance_size % 2 != 0:
@@ -81,7 +81,7 @@ for t in range(1, q + 1):
     Q_t_prev = cp.bmat([[A[t - 1], B[t - 1]], [J @ B[t - 1] @ J, J @ A[t - 1] @ J]])
 
     if args.use_new_constraints: 
-        if t % 2 == 0: 
+        if t % 2 == 1: 
             Q_t_next = cp.bmat([[A[t + 1], B[t + 1]], [J @ B[t + 1] @ J, J @ A[t + 1] @ J]])
             constraints += [
                 tr_off_diag(2*Q_t - Q_t_prev - Q_t_next, i) == tr_off_diag(Q_t_prev - Q_t_next, N - i) for i in range(1, N)
@@ -122,12 +122,17 @@ if args.generate_plots:
     for i in range(q + 1):
         P[i] = [tr_off_diag(Q[i], j) for j in range(-N+1, N)]
 
+    if args.use_new_constraints:  
+        constr_flag = "_new_constraints" 
+    else: 
+        constr_flag = "_old_constraints"
+
     # Plot the solution polynomials
     thetas = np.linspace(0, 2 * np.pi, N * 6 + 100)
     for i in range(q + 1):
         plt.plot(thetas, poly_val(P[i], np.exp(1j * thetas)), label='P_' + str(i))
     plt.legend()
-    fig_name = "SDP_polynomial_values_N=" + str(N) + "_q=" + str(q) + ".png"
+    fig_name = "SDP_polynomial_values_N=" + str(N) + "_q=" + str(q) + constr_flag + ".png"
     if plot_polys:
         plt.show()
     plt.savefig("Plots/symmetrized/" + fig_name)
@@ -139,7 +144,7 @@ if args.generate_plots:
     for i in range(q+1):
         plt.plot(degs, P[i], label='P_' + str(i))
     plt.legend()
-    fig_name = "SDP_polynomial_coeffs_N=" + str(N) + "_q=" + str(q) + ".png"
+    fig_name = "SDP_polynomial_coeffs_N=" + str(N) + "_q=" + str(q) + constr_flag + ".png"
     if plot_poly_coeffs:
         plt.show()
     plt.savefig("Plots/symmetrized/" + fig_name)
