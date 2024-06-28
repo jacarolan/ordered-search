@@ -8,10 +8,11 @@ from matplotlib import pyplot as plt
 parser = argparse.ArgumentParser()
 parser.add_argument("query_count", help="The number of queries.", type=int)
 parser.add_argument("instance_size", help="The size of the OSP instance.", type=int)
-parser.add_argument("--use-new-constraints", help="Add flag to use new set of equality constraints. Note: query count must be even in this case.", action='store_true')
-parser.add_argument("--generate-plots", help="Add flag to generate plots.", action='store_true')
 parser.add_argument("--solver", help="Choose which solver to use.", type=str)
 parser.add_argument("--repeats", help="Number of times the solver should be run for profiling purposes.", type=int)
+parser.add_argument("--use-new-constraints", help="Add flag to use new set of equality constraints. Note: query count must be even in this case.", action='store_true')
+parser.add_argument("--save-results", help="Add flag to save solutions to disk.", action='store_true')
+parser.add_argument("--generate-plots", help="Add flag to generate plots.", action='store_true')
 args = parser.parse_args()
 
 if args.use_new_constraints and args.query_count % 2 == 1: 
@@ -127,7 +128,7 @@ else:
     exit()
 
 
-if args.generate_plots:
+if args.generate_plots or args.save_results:
     Q = [[] for _ in range(q + 1)]
     Q[0] = np.ones((N, N)) / N
     Q[q] = np.eye(N, N) / N
@@ -140,12 +141,17 @@ if args.generate_plots:
         Q[i] = np.block([[A[i].value, B[i].value], [J @ B[i].value @ J, J @ A[i].value @ J]])
     for i in range(q + 1):
         P[i] = [tr(Q[i], j) for j in range(-N+1, N)]
-
+    
     if args.use_new_constraints:  
         constr_flag = "_new_constraints" 
     else: 
         constr_flag = "_old_constraints"
 
+if args.save_results:
+    txt_file_name = "polynomial_coeffs_" + str(N) + "_" + str(q) + constr_flag + ".txt"
+    np.savetxt(txt_file_name, P, fmt="%1.2f")
+
+if args.generate_plots:
     # Plot the solution polynomials
     thetas = np.linspace(0, 2 * np.pi, N * 6 + 100)
     for i in range(q + 1):
