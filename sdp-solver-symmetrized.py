@@ -11,13 +11,10 @@ parser.add_argument("query_count", help="The number of queries.", type=int)
 parser.add_argument("instance_size", help="The size of the OSP instance.", type=int)
 parser.add_argument("--solver", help="Choose which solver to use.", type=str)
 parser.add_argument("--repeats", help="Number of times the solver should be run for profiling purposes.", type=int)
-parser.add_argument("--use-new-constraints", help="Add flag to use new set of equality constraints. Note: query count must be even in this case.", action='store_true')
+parser.add_argument("--use-new-constraints", help="Add flag to use new set of equality constraints.", action='store_true')
 parser.add_argument("--skip-save", help="Add flag to skip saving solutions to disk.", action='store_true')
 parser.add_argument("--generate-plots", help="Add flag to generate plots.", action='store_true')
 args = parser.parse_args()
-
-if args.use_new_constraints and args.query_count % 2 == 1: 
-    raise ValueError("Query count must be odd when new constraints are used.")
 
 if args.instance_size % 2 != 0:
     raise ValueError("This program requires the instance size to be even.")
@@ -99,17 +96,19 @@ for i in range(1, q):
 for t in range(1, q + 1):
     Q_t = cp.bmat([[A[t], B[t]], [J @ B[t] @ J, J @ A[t] @ J]])
     Q_t_prev = cp.bmat([[A[t - 1], B[t - 1]], [J @ B[t - 1] @ J, J @ A[t - 1] @ J]])
+    t_is_odd = (t % 2 == 1)
+    last_step = (t == q)
 
-    if args.use_new_constraints: 
-        if t % 2 == 1: 
-            Q_t_next = cp.bmat([[A[t + 1], B[t + 1]], [J @ B[t + 1] @ J, J @ A[t + 1] @ J]])
-            constraints += [
-                2*tr(Q_t, i) - tr(Q_t_prev, i) - tr(Q_t_next, i) == tr(Q_t_prev, N-i) - tr(Q_t_next, N-i) for i in range(1, N)
-            ]
-    else:
+    if args.use_new_constraints and t_is_odd and not last_step:
+        Q_t_next = cp.bmat([[A[t + 1], B[t + 1]], [J @ B[t + 1] @ J, J @ A[t + 1] @ J]])
         constraints += [
-        tr(Q_t, i) + (-1)**t * tr(Q_t, i-N) == tr(Q_t_prev, i) + (-1)**t * tr(Q_t_prev, i-N) for i in range(1, N)
-    ]
+            2*tr(Q_t, i) - tr(Q_t_prev, i) - tr(Q_t_next, i) == tr(Q_t_prev, N-i) - tr(Q_t_next, N-i) for i in range(1, N)
+        ] 
+
+    if not args.use_new_constraints or (last_step and t_is_odd):
+        constraints += [
+            tr(Q_t, i) + (-1)**t * tr(Q_t, i-N) == tr(Q_t_prev, i) + (-1)**t * tr(Q_t_prev, i-N) for i in range(1, N)
+        ]
 
 
 print("Number of constraints is " + str(len(constraints)))
@@ -148,7 +147,7 @@ if args.generate_plots or not args.skip_save:
         constr_flag = "_old_constraints"
 
 if not args.skip_save:
-    txt_file_name = "polynomial_coeffs_" + str(N) + "_" + str(q) + constr_flag + ".txt"
+    txt_file_name = "polynomial_coeffs_" + str(q) + "_" + str(N) + constr_flag + ".txt"
     makedirs(EXPORTS_DIR, exist_ok=True)
     np.savetxt(EXPORTS_DIR + txt_file_name, P, fmt="%+1.2f")
 
@@ -158,7 +157,7 @@ if args.generate_plots:
     for i in range(q + 1):
         plt.plot(thetas, poly_val(P[i], np.exp(1j * thetas)), label='P_' + str(i))
     plt.legend()
-    fig_name = "SDP_polynomial_values_N=" + str(N) + "_q=" + str(q) + constr_flag + ".png"
+    fig_name = "SDP_polynomial_values_" + str(q) + "_" + str(N) + constr_flag + ".png"
     # if plot_polys: TODO 
     #     plt.show()
     plt.savefig("Plots/symmetrized/" + fig_name)
@@ -170,7 +169,7 @@ if args.generate_plots:
     for i in range(q+1):
         plt.plot(degs, P[i], label='P_' + str(i))
     plt.legend()
-    fig_name = "SDP_polynomial_coeffs_N=" + str(N) + "_q=" + str(q) + constr_flag + ".png"
+    fig_name = "SDP_polynomial_coeffs_" + str(q) + "_" + str(N) + constr_flag + ".png"
     # if plot_poly_coeffs: TODO 
     #     plt.show()
     plt.savefig("Plots/symmetrized/" + fig_name)
