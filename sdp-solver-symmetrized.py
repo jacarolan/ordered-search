@@ -136,7 +136,7 @@ print("Finished. Time elapsed: " + str(round(elapsed, 2)))
 BENCHMARK_FILE_HEADER = ["rep_count", "q", "N", "t_elapsed"]
 benchmark_line = list(map(str, [rep_count, q, N, round(elapsed, 2)]))
 
-benchmark_filepath = EXPORTS_DIR + "benchmarks/" + constr_flag + ".txt"
+benchmark_filepath = EXPORTS_DIR + "benchmarks/" + constr_flag + ".csv"
 if not os.path.isfile(benchmark_filepath): 
     makedirs(EXPORTS_DIR + "benchmarks/", exist_ok=True)
     with open(benchmark_filepath, "w") as benchmark_file:

@@ -1,6 +1,6 @@
 #!/bin/sh
 
-readonly BENCHMARK_FILENAME="exports/benchmarks/new_constraints.txt"
+readonly BENCHMARK_FILENAME="exports/benchmarks/new_constraints.csv"
 rm -f $BENCHMARK_FILENAME
 
 for k in $(seq 1 6); 
