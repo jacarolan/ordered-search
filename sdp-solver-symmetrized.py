@@ -10,7 +10,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument("query_count", help="The number of queries.", type=int)
 parser.add_argument("instance_size", help="The size of the OSP instance.", type=int)
 parser.add_argument("--solver", help="Choose which solver to use.", type=str)
-parser.add_argument("--repeats", help="Number of times the solver should be run for profiling purposes.", type=int)
+parser.add_argument("--repeats", help="Number of times the solver should be run for profiling purposes. Defaults to 1.", type=int)
 parser.add_argument("--use-new-constraints", help="Add flag to use new set of equality constraints.", action='store_true')
 parser.add_argument("--skip-save", help="Add flag to skip saving solutions to disk.", action='store_true')
 parser.add_argument("--generate-plots", help="Add flag to generate plots.", action='store_true')
@@ -27,7 +27,7 @@ if args.solver == "MOSEK":
 if solver == None: 
     solver = cp.SCS
 
-rep_count = 10
+rep_count = 1
 if args.repeats != None:
     rep_count = args.repeats
 
