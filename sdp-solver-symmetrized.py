@@ -2,6 +2,7 @@
 import argparse
 import timeit
 from os import makedirs
+import os.path
 import cvxpy as cp
 import numpy as np
 from matplotlib import pyplot as plt
@@ -27,12 +28,14 @@ if args.solver == "MOSEK":
 if solver == None: 
     solver = cp.SCS
 
+if args.use_new_constraints:  
+    constr_flag = "new_constraints" 
+else: 
+    constr_flag = "old_constraints"
+
 rep_count = 1
 if args.repeats != None:
     rep_count = args.repeats
-
-print("Using solver " + str(solver) + ".")
-print("Running solve " + str(rep_count) + " time(s).")
 
 
 # Parameters for the ordered search SDP
@@ -42,6 +45,10 @@ q = args.query_count      # Number of queries
 epsilon = 1e-6            # Solver precision (default is not high enough)
 EXPORTS_DIR = "exports/"   # relative path to directory for exports
 # Note that plots will always be saved, flags determined if they are shown
+
+print("Invoked with size params " + str(q) + " " + str(N) + ".")
+print("Using solver " + str(solver) + ".")
+print("Running solve " + str(rep_count) + " time(s).")
 
 ############################################################
 ################ Subroutine Definitions ####################
@@ -57,6 +64,11 @@ def tr(M, i):
         return np.sum([M[j-i, j] for j in range(N+i)])
     else:
         return np.trace(M)
+    
+
+Rs = [np.identity(N)] 
+for i in range(0, N-1):
+    Rs += [np.transpose(np.triu(np.roll(np.transpose(Rs[i]), 1, axis=1)))]
 
 # Returns a list of values of symmetric laurent polynomial, assumes length of P is odd
 def poly_val(P, xs):
@@ -102,12 +114,12 @@ for t in range(1, q + 1):
     if args.use_new_constraints and t_is_odd and not last_step:
         Q_t_next = cp.bmat([[A[t + 1], B[t + 1]], [J @ B[t + 1] @ J, J @ A[t + 1] @ J]])
         constraints += [
-            2*tr(Q_t, i) - tr(Q_t_prev, i) - tr(Q_t_next, i) == tr(Q_t_prev, N-i) - tr(Q_t_next, N-i) for i in range(1, N)
+            cp.trace(Rs[i] @ (2*Q_t - Q_t_prev - Q_t_next) - Rs[N-i] @ (Q_t_prev - Q_t_next))  == 0 for i in range(1, N)
         ] 
 
     if not args.use_new_constraints or (last_step and t_is_odd):
         constraints += [
-            tr(Q_t, i) + (-1)**t * tr(Q_t, i-N) == tr(Q_t_prev, i) + (-1)**t * tr(Q_t_prev, i-N) for i in range(1, N)
+            cp.trace((Rs[i] + (-1)**t * Rs[N-i]) @ (Q_t - Q_t_prev)) ==  0  for i in range(1, N)
         ]
 
 
@@ -117,9 +129,25 @@ print("Solving SDP")
 prob = cp.Problem(cp.Minimize(0),
                   constraints)
 solve = lambda: prob.solve(eps=epsilon, solver=solver)
-print("Finished. Time elapsed: " + str(timeit.timeit("solve()", globals=globals(), number=rep_count)))
+elapsed = timeit.timeit("solve()", globals=globals(), number=rep_count)
+print("Finished. Time elapsed: " + str(round(elapsed, 2)))
 
-# Print whether a solution was found
+
+BENCHMARK_FILE_HEADER = ["rep_count", "q", "N", "t_elapsed"]
+benchmark_line = list(map(str, [rep_count, q, N, round(elapsed, 2)]))
+
+benchmark_filepath = EXPORTS_DIR + "benchmarks/" + constr_flag + ".txt"
+if not os.path.isfile(benchmark_filepath): 
+    makedirs(EXPORTS_DIR + "benchmarks/", exist_ok=True)
+    with open(benchmark_filepath, "w") as benchmark_file:
+        benchmark_file.write(" ".join(BENCHMARK_FILE_HEADER) + "\n")
+        benchmark_file.close()
+
+with open(benchmark_filepath, "a") as benchmark_file:
+    info = [rep_count, q, N, round(elapsed, 2)]
+    benchmark_file.write(" ".join(benchmark_line) + "\n")
+    benchmark_file.close()
+
 if prob.value < 2:
     print("SDP was feasible")
 else:
@@ -140,14 +168,9 @@ if args.generate_plots or not args.skip_save:
         Q[i] = np.block([[A[i].value, B[i].value], [J @ B[i].value @ J, J @ A[i].value @ J]])
     for i in range(q + 1):
         P[i] = [tr(Q[i], j) for j in range(-N+1, N)]
-    
-    if args.use_new_constraints:  
-        constr_flag = "_new_constraints" 
-    else: 
-        constr_flag = "_old_constraints"
 
 if not args.skip_save:
-    txt_file_name = "polynomial_coeffs_" + str(q) + "_" + str(N) + constr_flag + ".txt"
+    txt_file_name = "polynomial_coeffs_" + str(q) + "_" + str(N) + "_" + constr_flag + ".txt"
     makedirs(EXPORTS_DIR, exist_ok=True)
     np.savetxt(EXPORTS_DIR + txt_file_name, P, fmt="%+1.2f")
 
@@ -157,7 +180,7 @@ if args.generate_plots:
     for i in range(q + 1):
         plt.plot(thetas, poly_val(P[i], np.exp(1j * thetas)), label='P_' + str(i))
     plt.legend()
-    fig_name = "SDP_polynomial_values_" + str(q) + "_" + str(N) + constr_flag + ".png"
+    fig_name = "SDP_polynomial_values_" + str(q) + "_" + str(N) + "_" + constr_flag + ".png"
     # if plot_polys: TODO 
     #     plt.show()
     plt.savefig("Plots/symmetrized/" + fig_name)
@@ -169,7 +192,7 @@ if args.generate_plots:
     for i in range(q+1):
         plt.plot(degs, P[i], label='P_' + str(i))
     plt.legend()
-    fig_name = "SDP_polynomial_coeffs_" + str(q) + "_" + str(N) + constr_flag + ".png"
+    fig_name = "SDP_polynomial_coeffs_" + str(q) + "_" + str(N) + "_" + constr_flag + ".png"
     # if plot_poly_coeffs: TODO 
     #     plt.show()
     plt.savefig("Plots/symmetrized/" + fig_name)
