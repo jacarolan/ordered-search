@@ -1,6 +1,7 @@
 # Import packages.
 import argparse
 import timeit
+from os import makedirs
 import cvxpy as cp
 import numpy as np
 from matplotlib import pyplot as plt
@@ -11,7 +12,7 @@ parser.add_argument("instance_size", help="The size of the OSP instance.", type=
 parser.add_argument("--solver", help="Choose which solver to use.", type=str)
 parser.add_argument("--repeats", help="Number of times the solver should be run for profiling purposes.", type=int)
 parser.add_argument("--use-new-constraints", help="Add flag to use new set of equality constraints. Note: query count must be even in this case.", action='store_true')
-parser.add_argument("--save-results", help="Add flag to save solutions to disk.", action='store_true')
+parser.add_argument("--skip-save", help="Add flag to skip saving solutions to disk.", action='store_true')
 parser.add_argument("--generate-plots", help="Add flag to generate plots.", action='store_true')
 args = parser.parse_args()
 
@@ -42,8 +43,7 @@ print("Running solve " + str(rep_count) + " time(s).")
 N = args.instance_size    # Instance size (MUST BE EVEN!!!)
 q = args.query_count      # Number of queries
 epsilon = 1e-6            # Solver precision (default is not high enough)
-plot_polys = False        # Plots analogous to Figure 1 in [arxiv:0608161]
-plot_poly_coeffs = False  # Plots analogous to Figure 2 in [arxiv:0608161]
+EXPORTS_DIR = "exports/"   # relative path to directory for exports
 # Note that plots will always be saved, flags determined if they are shown
 
 ############################################################
@@ -128,7 +128,7 @@ else:
     exit()
 
 
-if args.generate_plots or args.save_results:
+if args.generate_plots or not args.skip_save:
     Q = [[] for _ in range(q + 1)]
     Q[0] = np.ones((N, N)) / N
     Q[q] = np.eye(N, N) / N
@@ -147,9 +147,10 @@ if args.generate_plots or args.save_results:
     else: 
         constr_flag = "_old_constraints"
 
-if args.save_results:
+if not args.skip_save:
     txt_file_name = "polynomial_coeffs_" + str(N) + "_" + str(q) + constr_flag + ".txt"
-    np.savetxt(txt_file_name, P, fmt="%1.2f")
+    makedirs(EXPORTS_DIR, exist_ok=True)
+    np.savetxt(EXPORTS_DIR + txt_file_name, P, fmt="%+1.2f")
 
 if args.generate_plots:
     # Plot the solution polynomials
@@ -158,8 +159,8 @@ if args.generate_plots:
         plt.plot(thetas, poly_val(P[i], np.exp(1j * thetas)), label='P_' + str(i))
     plt.legend()
     fig_name = "SDP_polynomial_values_N=" + str(N) + "_q=" + str(q) + constr_flag + ".png"
-    if plot_polys:
-        plt.show()
+    # if plot_polys: TODO 
+    #     plt.show()
     plt.savefig("Plots/symmetrized/" + fig_name)
     print("Saving polynomial values plot in Plots/symmetrized/" + fig_name)
     plt.clf()
@@ -170,7 +171,7 @@ if args.generate_plots:
         plt.plot(degs, P[i], label='P_' + str(i))
     plt.legend()
     fig_name = "SDP_polynomial_coeffs_N=" + str(N) + "_q=" + str(q) + constr_flag + ".png"
-    if plot_poly_coeffs:
-        plt.show()
+    # if plot_poly_coeffs: TODO 
+    #     plt.show()
     plt.savefig("Plots/symmetrized/" + fig_name)
     print("Saving polynomial coefficients plot in Plots/symmetrized/" + fig_name)
