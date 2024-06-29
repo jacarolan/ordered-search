@@ -19,7 +19,7 @@ As{q} = eye(N/2)/N;
 Bs{1} = E / N;
 Bs{q} = zeros(N/2, N/2);
 
-Constraints = cell(1,4*q);
+Constraints = cell(1, (N + 3)*q); % 4q + (N-1)q 
 cc = 1;
 
 for i = 1:q
@@ -33,3 +33,13 @@ for i = 1:q
     Constraints{cc+3} = ((As{i} - Bs{i}) * J >= 0);
     cc = cc + 4;
 end
+
+for t = 2:(q+1)
+    Q_curr = [As{t}, Bs{t}; J * Bs{t} * J, J * As{t} * J];
+    Q_prev = [As{t-1}, Bs{t-1}; J * Bs{t-1} * J, J * As{t-1} * J];
+
+    for i=1:N 
+        Constraints{cc} = %TODO
+        cc = cc + 1;
+    end 
+end 
