@@ -1,7 +1,7 @@
 yalmip('clear')
 
 q = 6;
-N = 300;
+N = 100;
 
 Rs = zeros(N, N, N+1);
 Rs(:,:,1) = eye(N);
@@ -25,9 +25,12 @@ Constraints = [
 ];
 
 
+m = N/2;
+diag_idx = (1:m+1:m^2).' + (0:q-1)*m^2;
+Constraints = [Constraints, sum(As(diag_idx), 1) == 1/2];
+
 % TODO vectorize all of these 
 for i = 1:q
-    Constraints = [Constraints, trace(As(:,:,1)) == 1/2];
     Constraints = [Constraints, J * Bs(:,:,i) * J == transpose(Bs(:,:,i))];
 
     Constraints = [Constraints, (As(:,:,i) + Bs(:,:,i)) * J >= 0];
