@@ -128,7 +128,7 @@ print("Number of constraints is " + str(len(constraints)))
 print("Solving SDP")
 prob = cp.Problem(cp.Minimize(0),
                   constraints)
-solve = lambda: prob.solve(eps=epsilon, solver=solver)
+solve = lambda: prob.solve(eps=epsilon, solver=solver, verbose=True)
 elapsed = timeit.timeit("solve()", globals=globals(), number=rep_count)
 print("Finished. Time elapsed: " + str(round(elapsed, 2)))
 
