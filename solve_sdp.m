@@ -10,32 +10,36 @@ for i = 1:N
 end
 
 % Setting up the SDP
-I = eye(N/2);
-J = fliplr(eye(N/2));
-E = ones(N/2, N/2);
+m = N/2;
+diag_idx = (1:m+1:m^2).' + (0:q-1)*m^2;
 
-As = sdpvar(N/2, N/2, q+1); 
-Bs = sdpvar(N/2, N/2, q+1, 'full');
+I = eye(m);
+J = fliplr(eye(m));
+E = ones(m, m);
+
+As = sdpvar(m, m, q+1); 
+Bs = sdpvar(m, m, q+1, 'full');
+
+function prod = pagemtimesLeft(M, Pgs)
+    row_cnt = size(Pgs, 1);
+    pg_cnt = size(Pgs, 3);
+    prod = reshape(M * reshape(Pgs, row_cnt, []), row_cnt, row_cnt, pg_cnt);
+end
+
+function prod = pagemtimesRight(Pgs, M)
+    prod = pagetranspose(pagemtimesLeft(transpose(M), pagetranspose(Pgs)));
+end
 
 Constraints = [
     As(:,:,1) == E/N,... 
     Bs(:,:,1) == E/N,...
-    As(:,:,q) == eye(N/2)/N,...
-    Bs(:,:,q) == zeros(N/2)
+    As(:,:,q) == eye(m)/N,...
+    Bs(:,:,q) == zeros(m),...
+    sum(As(diag_idx), 1) == 1/2,... 
+    pagemtimesLeft(J, Bs) == pagetranspose(pagemtimesLeft(J, Bs)),...
+    pagemtimesRight((As + Bs), J) >= 0,...
+    pagemtimesRight((As - Bs), J) >= 0,...
 ];
-
-
-m = N/2;
-diag_idx = (1:m+1:m^2).' + (0:q-1)*m^2;
-Constraints = [Constraints, sum(As(diag_idx), 1) == 1/2];
-
-% TODO vectorize all of these 
-for i = 1:q
-    Constraints = [Constraints, J * Bs(:,:,i) * J == transpose(Bs(:,:,i))];
-
-    Constraints = [Constraints, (As(:,:,i) + Bs(:,:,i)) * J >= 0];
-    Constraints = [Constraints, (As(:,:,i) - Bs(:,:,i)) * J >= 0];
-end
 
 % TODO vectorize these as well
 for t = 2:q
