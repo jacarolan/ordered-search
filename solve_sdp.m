@@ -1,7 +1,7 @@
 yalmip('clear')
 
 q = 3;
-N = 4;
+N = 100;
 
 
 Rs = zeros(N, N, N);
@@ -29,7 +29,8 @@ Constraints = [
     pagetraces(As) == 1/2,... 
     pagemtimes_left(J, Bs) == pagetranspose(pagemtimes_left(J, Bs)),...
     pagemtimes_right((As + Bs), J) >= 0,...
-    pagemtimes_right((As - Bs), J) >= 0
+    pagemtimes_right((As - Bs), J) >= 0,...
+    As(:,:,1) == zeros(m)
 ];
 
 % TODO vectorize these as well
@@ -39,7 +40,7 @@ for t = 2:(q+1)
 
     for i=2:N 
         Constraints = [Constraints,...
-            tr(Q_curr - Q_prev, i) + (-1)^t * tr(Q_curr - Q_prev, N + 2 -i) == 0
+            tr(Q_curr - Q_prev, i) + (-1)^(t-1) * tr(Q_curr - Q_prev, N + 2 -i) == 0
             ];
     end 
 end 
