@@ -1,13 +1,16 @@
 yalmip('clear')
 
-q = 6;
-N = 100;
+q = 3;
+N = 200;
 
-Rs = zeros(N, N, N+1);
+
+Rs = zeros(N, N, N);
 Rs(:,:,1) = eye(N);
-for i = 1:N
-    Rs(:,:,i+1) = tril(circshift(Rs(:,:,i), -1, 2));
+for i = 2:N
+    Rs(:,:,i) = tril(circshift(Rs(:,:,i-1), -1, 2));
 end
+
+tr = @(M, i) trace(Rs(:,:,i) * M);
 
 % Setting up the SDP
 m = N/2;
@@ -33,8 +36,8 @@ end
 Constraints = [
     As(:,:,1) == E/N,... 
     Bs(:,:,1) == E/N,...
-    As(:,:,q) == eye(m)/N,...
-    Bs(:,:,q) == zeros(m),...
+    As(:,:,q+1) == eye(m)/N,...
+    Bs(:,:,q+1) == zeros(m),...
     sum(As(diag_idx), 1) == 1/2,... 
     pagemtimesLeft(J, Bs) == pagetranspose(pagemtimesLeft(J, Bs)),...
     pagemtimesRight((As + Bs), J) >= 0,...
@@ -42,18 +45,20 @@ Constraints = [
 ];
 
 % TODO vectorize these as well
-for t = 2:q
+for t = 2:(q+1)
     Q_curr = [As(:,:,t), Bs(:,:,t); J * Bs(:,:,t) * J, J * As(:,:,t) * J];
     Q_prev = [As(:,:,t-1), Bs(:,:,t-1); J * Bs(:,:,t-1) * J, J * As(:,:,t-1) * J];
 
-    for i=1:N 
-        Constraints = [Constraints, (trace((Rs(:,:,i+1) + (-1)^t * Rs(:,:,N-i+1)) * (Q_curr - Q_prev)) == 0)];
+    for i=2:N 
+        Constraints = [Constraints,...
+            tr(Q_curr - Q_prev, i) + (-1)^t * tr(Q_curr - Q_prev, N + 2 -i) == 0
+            ];
     end 
 end 
 
 
-Objective = 0;
+Objective = 1;
 
-options = sdpsettings('verbose', 1, 'solver', 'SCS');
+options = sdpsettings('verbose', 1, 'solver', 'MOSEK');
 
-sol = optimize(Constraints, Objective, options);
+optimize(Constraints, Objective, options)
