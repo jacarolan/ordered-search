@@ -1,7 +1,7 @@
 yalmip('clear')
 
 q = 3;
-N = 100;
+N = 12;
 
 
 Rs = zeros(N, N, N);
@@ -27,10 +27,19 @@ Constraints = [
     As(:,:,q+1) == eye(m)/N,...
     Bs(:,:,q+1) == zeros(m),...
     pagetraces(As) == 1/2,... 
-    pagemtimes_left(J, Bs) == pagetranspose(pagemtimes_left(J, Bs)),...
-    pagemtimes_right((As + Bs), J) >= 0,...
-    pagemtimes_right((As - Bs), J) >= 0,...
+    pagemtimes_left(J, Bs) == pagetranspose(pagemtimes_left(J, Bs))
 ];
+
+for t=2:(q+1)
+    Mpos = (As(:, :, t) + Bs(:, :, t)) * J;
+    Mneg = (As(:, :, t) - Bs(:, :, t)) * J;
+    Constraints = [Constraints,...
+        Mpos + transpose(Mpos) >= 0,...
+        Mneg + transpose(Mneg) >= 0
+    ];
+end
+
+display(Constraints);
 
 % TODO vectorize these as well
 for t = 2:(q+1)
@@ -50,3 +59,11 @@ Objective = 1;
 options = sdpsettings('verbose', 1, 'solver', 'MOSEK');
 
 optimize(Constraints, Objective, options)
+
+% Avals = value(As);
+% Bvals = value(Bs);
+% 
+% for t = 2:(q+1)
+%     Q_curr = [Avals(:,:,t), Bvals(:,:,t); J * Bvals(:,:,t) * J, J * Avals(:,:,t) * J];
+%     display(eig(Q_curr));
+% end
