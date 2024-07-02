@@ -1,8 +1,13 @@
 yalmip('clear')
 
 q = 3;
-N = 12;
+N = 56;
 
+m = N/2;
+I = eye(m);
+J = fliplr(I);
+E = ones(m, m);
+U = 1/sqrt(2) * [I I; J -J];
 
 Rs = zeros(N, N, N);
 Rs(:,:,1) = eye(N);
@@ -13,29 +18,28 @@ end
 tr = @(M, i) trace(Rs(:,:,i) * M);
 
 % Setting up the SDP
-m = N/2;
-I = eye(m);
-J = fliplr(eye(m));
-E = ones(m, m);
+Cs = sdpvar(m, m, q+1); % C_i = (A_i + B_i * J) / 2
+Ds = sdpvar(m, m, q+1); % D_i = (A_i - B_i * J) / 2
 
-As = sdpvar(m, m, q+1); 
-Bs = sdpvar(m, m, q+1, 'full');
+As = @(i) (Cs(:, :, i) + Ds(:, :, i)); % A_i = C_i + D_i 
+Bs = @(i) (Cs(:, :, i) - Ds(:, :, i))*J; % B_i = (C_i - D_i) * J
 
 Constraints = [
-    As(:,:,1) == E/N,... 
-    Bs(:,:,1) == E/N,...
-    As(:,:,q+1) == eye(m)/N,...
-    Bs(:,:,q+1) == zeros(m),...
-    pagetraces(As) == 1/2,... 
-    pagemtimes_left(J, Bs) == pagetranspose(pagemtimes_left(J, Bs))
+    Cs(:, :, 1) == 1/(2*N) * E * (I + J),...
+    Ds(:, :, 1) == 1/(2*N) * E * (I - J),...
+    Cs(:, :, q+1) == 1/(2*N) * I,...
+    Ds(:, :, q+1) == 1/(2*N) * I,...
+    % As(1) == E/N,... 
+    % Bs(1) == E/N,...
+    % As(q+1) == eye(m)/N,...
+    % Bs(q+1) == zeros(m)
 ];
 
-for t=2:(q+1)
-    Mpos = (As(:, :, t) + Bs(:, :, t)) * J;
-    Mneg = (As(:, :, t) - Bs(:, :, t)) * J;
+for t=1:q+1
     Constraints = [Constraints,...
-        Mpos + transpose(Mpos) >= 0,...
-        Mneg + transpose(Mneg) >= 0
+        trace(As(t)) == 1/2,... % should try to vectorize
+        Cs(:, :, t) >= 0,...
+        Ds(:, :, t) >= 0
     ];
 end
 
@@ -43,8 +47,8 @@ display(Constraints);
 
 % TODO vectorize these as well
 for t = 2:(q+1)
-    Q_curr = [As(:,:,t), Bs(:,:,t); J * Bs(:,:,t) * J, J * As(:,:,t) * J];
-    Q_prev = [As(:,:,t-1), Bs(:,:,t-1); J * Bs(:,:,t-1) * J, J * As(:,:,t-1) * J];
+    Q_curr = [As(t), Bs(t); J * Bs(t) * J, J * As(t) * J];
+    Q_prev = [As(t-1), Bs(t-1); J * Bs(t-1) * J, J * As(t-1) * J];
 
     for i=2:N 
         Constraints = [Constraints,...
