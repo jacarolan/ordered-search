@@ -1,13 +1,14 @@
 yalmip('clear')
 
 q = 3;
-N = 56;
+N = 58;
 
 m = N/2;
 I = eye(m);
 J = fliplr(I);
 E = ones(m, m);
 U = 1/sqrt(2) * [I I; J -J];
+Z = zeros(m);
 
 Rs = zeros(N, N, N);
 Rs(:,:,1) = eye(N);
@@ -15,7 +16,10 @@ for i = 2:N
     Rs(:,:,i) = tril(circshift(Rs(:,:,i-1), -1, 2));
 end
 
+Rconjs = pagemtimes(pagemtimes(transpose(U), Rs), U);
+
 tr = @(M, i) trace(Rs(:,:,i) * M);
+tr_conj = @(M, i) trace(Rconjs(:,:,i) * M);
 
 % Setting up the SDP
 Cs = sdpvar(m, m, q+1); % C_i = (A_i + B_i * J) / 2
@@ -43,16 +47,18 @@ for t=1:q+1
     ];
 end
 
-display(Constraints);
 
 % TODO vectorize these as well
 for t = 2:(q+1)
-    Q_curr = [As(t), Bs(t); J * Bs(t) * J, J * As(t) * J];
-    Q_prev = [As(t-1), Bs(t-1); J * Bs(t-1) * J, J * As(t-1) * J];
+    Q_curr = blkdiag(Cs(:,:,t), Ds(:,:,t));
+    Q_prev = blkdiag(Cs(:,:,t-1), Ds(:,:,t-1));
+    % Q_curr = [As(t), Bs(t); J * Bs(t) * J, J * As(t) * J];
+    % Q_prev = [As(t-1), Bs(t-1); J * Bs(t-1) * J, J * As(t-1) * J];
 
     for i=2:N 
         Constraints = [Constraints,...
-            tr(Q_curr - Q_prev, i) + (-1)^(t-1) * tr(Q_curr - Q_prev, N + 2 -i) == 0
+            tr_conj(Q_curr - Q_prev, i) + (-1)^(t-1) * tr_conj(Q_curr - Q_prev, N + 2 -i) == 0
+            % tr(Q_curr - Q_prev, i) + (-1)^(t-1) * tr(Q_curr - Q_prev, N + 2 -i) == 0
             ];
     end 
 end 
