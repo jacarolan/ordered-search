@@ -26,7 +26,7 @@ if args.solver == "CVXOPT":
 if args.solver == "SCS":
     solver = cp.SCS
 if solver == None: 
-    solver = cp.Mosek
+    solver = cp.MOSEK
 
 if args.use_new_constraints:  
     constr_flag = "new_constraints" 
