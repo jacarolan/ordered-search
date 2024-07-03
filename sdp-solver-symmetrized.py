@@ -23,10 +23,10 @@ if args.instance_size % 2 != 0:
 solver = None
 if args.solver == "CVXOPT":
     solver = cp.CVXOPT
-if args.solver == "MOSEK":
-    solver = cp.MOSEK
-if solver == None: 
+if args.solver == "SCS":
     solver = cp.SCS
+if solver == None: 
+    solver = cp.Mosek
 
 if args.use_new_constraints:  
     constr_flag = "new_constraints" 
@@ -44,6 +44,8 @@ N = args.instance_size    # Instance size (MUST BE EVEN!!!)
 q = args.query_count      # Number of queries
 epsilon = 1e-6            # Solver precision (default is not high enough)
 EXPORTS_DIR = "exports/"   # relative path to directory for exports
+COEFFS_EXPORT_SUBDIR = "coefficients/" 
+PLOTS_EXPORT_SUBDIR = "plots/symmetrized/" 
 # Note that plots will always be saved, flags determined if they are shown
 
 print("Invoked with size params " + str(q) + " " + str(N) + ".")
@@ -68,7 +70,10 @@ def tr(M, i):
 
 Rs = [np.identity(N)] 
 for i in range(0, N-1):
-    Rs += [np.transpose(np.triu(np.roll(np.transpose(Rs[i]), 1, axis=1)))]
+    Rs += [np.tril(np.roll(Rs[i], -1, axis=1))]
+
+def my_tr(M, i):
+    return cp.trace(Rs[i] @ M)
 
 # Returns a list of values of symmetric laurent polynomial, assumes length of P is odd
 def poly_val(P, xs):
@@ -106,20 +111,21 @@ for i in range(1, q):
 
 
 for t in range(1, q + 1):
-    Q_t = cp.bmat([[A[t], B[t]], [J @ B[t] @ J, J @ A[t] @ J]])
-    Q_t_prev = cp.bmat([[A[t - 1], B[t - 1]], [J @ B[t - 1] @ J, J @ A[t - 1] @ J]])
+    Q_curr = cp.bmat([[A[t], B[t]], [J @ B[t] @ J, J @ A[t] @ J]])
+    Q_prev = cp.bmat([[A[t - 1], B[t - 1]], [J @ B[t - 1] @ J, J @ A[t - 1] @ J]])
     t_is_odd = (t % 2 == 1)
     last_step = (t == q)
 
     if args.use_new_constraints and t_is_odd and not last_step:
-        Q_t_next = cp.bmat([[A[t + 1], B[t + 1]], [J @ B[t + 1] @ J, J @ A[t + 1] @ J]])
+        Q_next = cp.bmat([[A[t + 1], B[t + 1]], [J @ B[t + 1] @ J, J @ A[t + 1] @ J]])
         constraints += [
-            cp.trace(Rs[i] @ (2*Q_t - Q_t_prev - Q_t_next) - Rs[N-i] @ (Q_t_prev - Q_t_next))  == 0 for i in range(1, N)
+            2 * my_tr(Q_curr, i) == my_tr(Q_prev + Q_next, i) + my_tr(Q_prev - Q_next, N-i) for i in range(1, N)
         ] 
 
     if not args.use_new_constraints or (last_step and t_is_odd):
         constraints += [
-            cp.trace((Rs[i] + (-1)**t * Rs[N-i]) @ (Q_t - Q_t_prev)) ==  0  for i in range(1, N)
+            my_tr(Q_curr, i) + (-1)**t * my_tr(Q_curr, N-i) == my_tr(Q_prev, i) + (-1)**t * my_tr(Q_prev, N-i) for i in range(1, N)
+            # cp.trace((Rs[i] + (-1)**t * Rs[N-i]) @ (Q_curr - Q_prev)) ==  0  for i in range(1, N) # slightly more efficient? 
         ]
 
 
@@ -171,10 +177,11 @@ if args.generate_plots or not args.skip_save:
 
 if not args.skip_save:
     txt_file_name = "polynomial_coeffs_" + str(q) + "_" + str(N) + "_" + constr_flag + ".txt"
-    makedirs(EXPORTS_DIR, exist_ok=True)
-    np.savetxt(EXPORTS_DIR + txt_file_name, P, fmt="%+1.2f")
+    makedirs(EXPORTS_DIR + COEFFS_EXPORT_SUBDIR, exist_ok=True)
+    np.savetxt(EXPORTS_DIR + COEFFS_EXPORT_SUBDIR + txt_file_name, P, fmt="%+1.2f")
 
 if args.generate_plots:
+    makedirs(EXPORTS_DIR + PLOTS_EXPORT_SUBDIR, exist_ok=True)
     # Plot the solution polynomials
     thetas = np.linspace(0, 2 * np.pi, N * 6 + 100)
     for i in range(q + 1):
@@ -183,8 +190,8 @@ if args.generate_plots:
     fig_name = "SDP_polynomial_values_" + str(q) + "_" + str(N) + "_" + constr_flag + ".png"
     # if plot_polys: TODO 
     #     plt.show()
-    plt.savefig("Plots/symmetrized/" + fig_name)
-    print("Saving polynomial values plot in Plots/symmetrized/" + fig_name)
+    plt.savefig(EXPORTS_DIR + PLOTS_EXPORT_SUBDIR + fig_name)
+    print("Saving polynomial values plot in " + EXPORTS_DIR + PLOTS_EXPORT_SUBDIR + fig_name)
     plt.clf()
 
     # Plot the solution polynomial coefficients
@@ -195,5 +202,5 @@ if args.generate_plots:
     fig_name = "SDP_polynomial_coeffs_" + str(q) + "_" + str(N) + "_" + constr_flag + ".png"
     # if plot_poly_coeffs: TODO 
     #     plt.show()
-    plt.savefig("Plots/symmetrized/" + fig_name)
-    print("Saving polynomial coefficients plot in Plots/symmetrized/" + fig_name)
+    plt.savefig(EXPORTS_DIR + PLOTS_EXPORT_SUBDIR + fig_name)
+    print("Saving polynomial coefficients plot in " + EXPORTS_DIR + PLOTS_EXPORT_SUBDIR + fig_name)
