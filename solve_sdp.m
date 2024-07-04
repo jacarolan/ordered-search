@@ -1,7 +1,9 @@
 yalmip('clear')
 
-q = 3;
-N = 58;
+USE_NEW_CONSTRAINTS = false;
+
+q = 5;
+N = 300;
 
 m = N/2;
 I = eye(m);
@@ -50,17 +52,30 @@ end
 
 % TODO vectorize these as well
 for t = 2:(q+1)
+    step_is_odd  = (rem(t, 2) == 0); % indexing starts at 1... 
+    step_is_last = (t == q+1);
+
     Q_curr = blkdiag(Cs(:,:,t), Ds(:,:,t));
     Q_prev = blkdiag(Cs(:,:,t-1), Ds(:,:,t-1));
     % Q_curr = [As(t), Bs(t); J * Bs(t) * J, J * As(t) * J];
     % Q_prev = [As(t-1), Bs(t-1); J * Bs(t-1) * J, J * As(t-1) * J];
 
-    for i=2:N 
-        Constraints = [Constraints,...
-            tr_conj(Q_curr - Q_prev, i) + (-1)^(t-1) * tr_conj(Q_curr - Q_prev, N + 2 -i) == 0
-            % tr(Q_curr - Q_prev, i) + (-1)^(t-1) * tr(Q_curr - Q_prev, N + 2 -i) == 0
+    if USE_NEW_CONSTRAINTS && step_is_odd && ~step_is_last
+        Q_next = blkdiag(Cs(:, :, t+1), Ds(:, :, t+1));
+        for i=2:N
+            Constraints = [Constraints,...
+                tr_conj(2*Q_curr - Q_prev - Q_next, i) == -tr_conj(Q_prev - Q_next, N + 2 - i)
             ];
-    end 
+        end
+    end
+
+    if ~USE_NEW_CONSTRAINTS || (step_is_odd && step_is_last)
+        for i=2:N 
+            Constraints = [Constraints,...
+                tr_conj(Q_curr - Q_prev, i) + (-1)^(t-1) * tr_conj(Q_curr - Q_prev, N + 2 -i) == 0
+                ];
+        end
+    end
 end 
 
 
