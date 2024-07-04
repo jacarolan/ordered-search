@@ -12,6 +12,7 @@ parser.add_argument("query_count", help="The number of queries.", type=int)
 parser.add_argument("instance_size", help="The size of the OSP instance.", type=int)
 parser.add_argument("--solver", help="Choose which solver to use.", type=str)
 parser.add_argument("--repeats", help="Number of times the solver should be run for profiling purposes. Defaults to 1.", type=int)
+parser.add_argument("--accuracy", help="Enter an integer m for 1e-m accuracy.", type=int)
 parser.add_argument("--use-new-constraints", help="Add flag to use new set of equality constraints.", action='store_true')
 parser.add_argument("--skip-save", help="Add flag to skip saving solutions to disk.", action='store_true')
 parser.add_argument("--generate-plots", help="Add flag to generate plots.", action='store_true')
@@ -38,11 +39,15 @@ if args.repeats != None:
     rep_count = args.repeats
 
 
+epsilon = 1e-6            # Solver precision (default is not high enough)
+if args.accuracy != None:
+    epsilon = 1/10**args.accuracy
+
+
 # Parameters for the ordered search SDP
 # THIS CODE ASSUMES EVEN N!!!
 N = args.instance_size    # Instance size (MUST BE EVEN!!!)
 q = args.query_count      # Number of queries
-epsilon = 1e-6            # Solver precision (default is not high enough)
 EXPORTS_DIR = "exports/"   # relative path to directory for exports
 COEFFS_EXPORT_SUBDIR = "coefficients/" 
 PLOTS_EXPORT_SUBDIR = "plots/symmetrized/" 
@@ -119,7 +124,7 @@ for t in range(1, q + 1):
     if args.use_new_constraints and t_is_odd and not last_step:
         Q_next = cp.bmat([[A[t + 1], B[t + 1]], [J @ B[t + 1] @ J, J @ A[t + 1] @ J]])
         constraints += [
-            2 * my_tr(Q_curr, i) == my_tr(Q_prev + Q_next, i) + my_tr(Q_prev - Q_next, N-i) for i in range(1, N)
+            2 * my_tr(Q_curr, i) == my_tr(Q_prev + Q_next, i) + my_tr(-Q_prev + Q_next, N-i) for i in range(1, N)
         ] 
 
     if not args.use_new_constraints or (last_step and t_is_odd):
@@ -168,7 +173,7 @@ if args.generate_plots or not args.skip_save:
     # Q[i] = np.block([[A[i], B[i]], [J @ B[i] @ J, J @ A[i] @ J]])
 
     # Compute the solution polynomials
-    P = [[] for _ in range(q + 1)]
+    P = np.empty([q+1, 2*(N-1)+1])
     for i in range(1, q):
         # Q[i] = Q[i].value
         Q[i] = np.block([[A[i].value, B[i].value], [J @ B[i].value @ J, J @ A[i].value @ J]])
@@ -178,7 +183,7 @@ if args.generate_plots or not args.skip_save:
 if not args.skip_save:
     txt_file_name = "polynomial_coeffs_" + str(q) + "_" + str(N) + "_" + constr_flag + ".txt"
     makedirs(EXPORTS_DIR + COEFFS_EXPORT_SUBDIR, exist_ok=True)
-    np.savetxt(EXPORTS_DIR + COEFFS_EXPORT_SUBDIR + txt_file_name, P, fmt="%+1.2f")
+    np.savetxt(EXPORTS_DIR + COEFFS_EXPORT_SUBDIR + txt_file_name, P[:, (N-1):], fmt="%+1.3f")
 
 if args.generate_plots:
     makedirs(EXPORTS_DIR + PLOTS_EXPORT_SUBDIR, exist_ok=True)
