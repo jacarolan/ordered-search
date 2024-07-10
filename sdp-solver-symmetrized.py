@@ -89,6 +89,22 @@ def poly_val(P, xs):
         vals += [sum([P[i] * x**(i-mid_d) for i in range(d)])]
     return np.array(vals)
 
+def generate_change_of_basis_mx(n):
+    mx = [];
+    for i in range(n // 2 + 1): 
+        v = np.zeros(n);
+        v[i] = 1.0
+        v[n-1-i] = 1.0 
+        mx += [v]
+    for i in range(n // 2): 
+        v = np.zeros(n);
+        v[i] = -1.0
+        v[n-1-i] = 1.0 
+        mx += [v]
+    return np.linalg.inv(np.transpose(np.asmatrix(mx)))
+
+    
+
 ############################################################
 ###################### SDP Solving #########################
 ############################################################
@@ -139,7 +155,10 @@ print("Number of constraints is " + str(len(constraints)))
 print("Solving SDP")
 prob = cp.Problem(cp.Minimize(0),
                   constraints)
-solve = lambda: prob.solve(eps=epsilon, solver=solver, verbose=True)
+def solve():
+    prob._cache.param_prog = None
+    prob.solve(eps=epsilon, solver=solver, verbose=True)
+
 elapsed = timeit.timeit("solve()", globals=globals(), number=rep_count)
 print("Finished. Time elapsed: " + str(round(elapsed, 2)))
 
@@ -180,10 +199,15 @@ if args.generate_plots or not args.skip_save:
     for i in range(q + 1):
         P[i] = [tr(Q[i], j) for j in range(-N+1, N)]
 
+    basis_change_mx = generate_change_of_basis_mx(N-1)
+    new_coords = np.matmul(P[:, N:], np.transpose(basis_change_mx))
+
 if not args.skip_save:
     txt_file_name = "polynomial_coeffs_" + str(q) + "_" + str(N) + "_" + constr_flag + ".txt"
+    txt_file_name_new_basis = "new_basis_polynomial_coeffs_" + str(q) + "_" + str(N) + "_" + constr_flag + ".txt"
     makedirs(EXPORTS_DIR + COEFFS_EXPORT_SUBDIR, exist_ok=True)
     np.savetxt(EXPORTS_DIR + COEFFS_EXPORT_SUBDIR + txt_file_name, P[:, (N-1):], fmt="%+1.3f")
+    np.savetxt(EXPORTS_DIR + COEFFS_EXPORT_SUBDIR + txt_file_name_new_basis, new_coords, fmt="%+1.4f,")
 
 if args.generate_plots:
     makedirs(EXPORTS_DIR + PLOTS_EXPORT_SUBDIR, exist_ok=True)
@@ -202,10 +226,20 @@ if args.generate_plots:
     # Plot the solution polynomial coefficients
     degs = np.arange(-N+1, N)
     for i in range(q+1):
-        plt.plot(degs, P[i], label='P_' + str(i))
+        plt.scatter(degs, P[i], label='P_' + str(i))
     plt.legend()
     fig_name = "SDP_polynomial_coeffs_" + str(q) + "_" + str(N) + "_" + constr_flag + ".png"
     # if plot_poly_coeffs: TODO 
     #     plt.show()
     plt.savefig(EXPORTS_DIR + PLOTS_EXPORT_SUBDIR + fig_name)
+    plt.clf()
+
+    # Plot the solution polynomial coefficients in new basis 
+    degs = np.arange(1, N)
+    for i in range(q+1):
+        plt.scatter(degs, new_coords[i].tolist()[0], label='P_' + str(i))    
+    plt.legend()
+    fig_name = "new_basis_SDP_polynomial_coeffs_" + str(q) + "_" + str(N) + ".png"
+    plt.savefig(EXPORTS_DIR + PLOTS_EXPORT_SUBDIR + fig_name)
+    
     print("Saving polynomial coefficients plot in " + EXPORTS_DIR + PLOTS_EXPORT_SUBDIR + fig_name)
