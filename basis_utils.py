@@ -1,5 +1,5 @@
 import numpy as np
-np.set_printoptions(suppress=True)
+import math 
 
 
 
@@ -37,16 +37,17 @@ def generate_basis_ch_mx_chebyshev_to_hermite(N):
 
 
 
-def generate_basis_ch_mx_chebyshev_to_custom(n):
-    mx = [];
-    for i in range(n // 2 + 1): 
-        v = np.zeros(n);
+def generate_basis_ch_mx_chebyshev_to_custom(N):
+    coords = np.zeros((N,N))
+
+    for i in range(math.ceil(N/2)): 
+        v = np.zeros(N);
         v[i] = 1.0
-        v[n-1-i] = 1.0 
-        mx += [v]
-    for i in range(n // 2): 
-        v = np.zeros(n);
+        v[N-1-i] = 1.0 
+        coords[:,i] = v
+    for i in range(math.floor(N/2)): 
+        v = np.zeros(N);
         v[i] = -1.0
-        v[n-1-i] = 1.0 
-        mx += [v]
-    return np.linalg.inv(np.transpose(np.asmatrix(mx)))
+        v[N-1-i] = 1.0 
+        coords[:, math.ceil(N/2) + i] = v
+    return np.linalg.inv(coords)
