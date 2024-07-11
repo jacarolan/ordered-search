@@ -6,6 +6,8 @@ import os.path
 import cvxpy as cp
 import numpy as np
 from matplotlib import pyplot as plt
+import basis_utils  
+
 
 parser = argparse.ArgumentParser()
 parser.add_argument("query_count", help="The number of queries.", type=int)
@@ -13,7 +15,6 @@ parser.add_argument("instance_size", help="The size of the OSP instance.", type=
 parser.add_argument("--solver", help="Choose which solver to use.", type=str)
 parser.add_argument("--repeats", help="Number of times the solver should be run for profiling purposes. Defaults to 1.", type=int)
 parser.add_argument("--accuracy", help="Enter an integer m for 1e-m accuracy.", type=int)
-parser.add_argument("--use-new-constraints", help="Add flag to use new set of equality constraints.", action='store_true')
 parser.add_argument("--skip-save", help="Add flag to skip saving solutions to disk.", action='store_true')
 parser.add_argument("--generate-plots", help="Add flag to generate plots.", action='store_true')
 args = parser.parse_args()
@@ -28,11 +29,6 @@ if args.solver == "SCS":
     solver = cp.SCS
 if solver == None: 
     solver = cp.MOSEK
-
-if args.use_new_constraints:  
-    constr_flag = "new_constraints" 
-else: 
-    constr_flag = "old_constraints"
 
 rep_count = 1
 if args.repeats != None:
@@ -88,21 +84,6 @@ def poly_val(P, xs):
     for x in xs:
         vals += [sum([P[i] * x**(i-mid_d) for i in range(d)])]
     return np.array(vals)
-
-def generate_change_of_basis_mx(n):
-    mx = [];
-    for i in range(n // 2 + 1): 
-        v = np.zeros(n);
-        v[i] = 1.0
-        v[n-1-i] = 1.0 
-        mx += [v]
-    for i in range(n // 2): 
-        v = np.zeros(n);
-        v[i] = -1.0
-        v[n-1-i] = 1.0 
-        mx += [v]
-    return np.linalg.inv(np.transpose(np.asmatrix(mx)))
-
     
 
 ############################################################
@@ -137,17 +118,10 @@ for t in range(1, q + 1):
     t_is_odd = (t % 2 == 1)
     last_step = (t == q)
 
-    if args.use_new_constraints and t_is_odd and not last_step:
-        Q_next = cp.bmat([[A[t + 1], B[t + 1]], [J @ B[t + 1] @ J, J @ A[t + 1] @ J]])
-        constraints += [
-            2 * my_tr(Q_curr, i) == my_tr(Q_prev + Q_next, i) + my_tr(-Q_prev + Q_next, N-i) for i in range(1, N)
-        ] 
-
-    if not args.use_new_constraints or (last_step and t_is_odd):
-        constraints += [
-            my_tr(Q_curr, i) + (-1)**t * my_tr(Q_curr, N-i) == my_tr(Q_prev, i) + (-1)**t * my_tr(Q_prev, N-i) for i in range(1, N)
-            # cp.trace((Rs[i] + (-1)**t * Rs[N-i]) @ (Q_curr - Q_prev)) ==  0  for i in range(1, N) # slightly more efficient? 
-        ]
+    constraints += [
+        my_tr(Q_curr, i) + (-1)**t * my_tr(Q_curr, N-i) == my_tr(Q_prev, i) + (-1)**t * my_tr(Q_prev, N-i) for i in range(1, N)
+        # cp.trace((Rs[i] + (-1)**t * Rs[N-i]) @ (Q_curr - Q_prev)) ==  0  for i in range(1, N) # slightly more efficient? 
+    ]
 
 
 print("Number of constraints is " + str(len(constraints)))
@@ -166,7 +140,7 @@ print("Finished. Time elapsed: " + str(round(elapsed, 2)))
 BENCHMARK_FILE_HEADER = ["rep_count", "q", "N", "t_elapsed"]
 benchmark_line = list(map(str, [rep_count, q, N, round(elapsed, 2)]))
 
-benchmark_filepath = EXPORTS_DIR + "benchmarks/" + constr_flag + ".csv"
+benchmark_filepath = EXPORTS_DIR + "benchmarks/default.csv"
 if not os.path.isfile(benchmark_filepath): 
     makedirs(EXPORTS_DIR + "benchmarks/", exist_ok=True)
     with open(benchmark_filepath, "w") as benchmark_file:
@@ -199,15 +173,15 @@ if args.generate_plots or not args.skip_save:
     for i in range(q + 1):
         P[i] = [tr(Q[i], j) for j in range(-N+1, N)]
 
-    basis_change_mx = generate_change_of_basis_mx(N-1)
-    new_coords = np.matmul(P[:, N:], np.transpose(basis_change_mx))
+    basis_ch_mx_chebyshev_to_custom = basis_utils.generate_basis_ch_mx_chebyshev_to_custom(N-1)
+    custom_coords = np.matmul(P[:, N:], np.transpose(basis_ch_mx_chebyshev_to_custom))
 
 if not args.skip_save:
-    txt_file_name = "polynomial_coeffs_" + str(q) + "_" + str(N) + "_" + constr_flag + ".txt"
-    txt_file_name_new_basis = "new_basis_polynomial_coeffs_" + str(q) + "_" + str(N) + "_" + constr_flag + ".txt"
+    txt_file_name = "polynomial_coeffs_" + str(q) + "_" + str(N) + ".txt"
+    txt_file_name_new_basis = "polynomial_coeffs_" + str(q) + "_" + str(N) + "_custom_basis.txt"
     makedirs(EXPORTS_DIR + COEFFS_EXPORT_SUBDIR, exist_ok=True)
     np.savetxt(EXPORTS_DIR + COEFFS_EXPORT_SUBDIR + txt_file_name, P[:, (N-1):], fmt="%+1.3f")
-    np.savetxt(EXPORTS_DIR + COEFFS_EXPORT_SUBDIR + txt_file_name_new_basis, new_coords, fmt="%+1.4f,")
+    np.savetxt(EXPORTS_DIR + COEFFS_EXPORT_SUBDIR + txt_file_name_new_basis, custom_coords, fmt="%+1.4f,")
 
 if args.generate_plots:
     makedirs(EXPORTS_DIR + PLOTS_EXPORT_SUBDIR, exist_ok=True)
@@ -216,7 +190,7 @@ if args.generate_plots:
     for i in range(q + 1):
         plt.plot(thetas, poly_val(P[i], np.exp(1j * thetas)), label='P_' + str(i))
     plt.legend()
-    fig_name = "SDP_polynomial_values_" + str(q) + "_" + str(N) + "_" + constr_flag + ".png"
+    fig_name = "SDP_polynomial_values_" + str(q) + "_" + str(N) + ".png"
     # if plot_polys: TODO 
     #     plt.show()
     plt.savefig(EXPORTS_DIR + PLOTS_EXPORT_SUBDIR + fig_name)
@@ -228,7 +202,7 @@ if args.generate_plots:
     for i in range(q+1):
         plt.scatter(degs, P[i], label='P_' + str(i))
     plt.legend()
-    fig_name = "SDP_polynomial_coeffs_" + str(q) + "_" + str(N) + "_" + constr_flag + ".png"
+    fig_name = "SDP_polynomial_coeffs_" + str(q) + "_" + str(N) + ".png"
     # if plot_poly_coeffs: TODO 
     #     plt.show()
     plt.savefig(EXPORTS_DIR + PLOTS_EXPORT_SUBDIR + fig_name)
@@ -237,9 +211,9 @@ if args.generate_plots:
     # Plot the solution polynomial coefficients in new basis 
     degs = np.arange(1, N)
     for i in range(q+1):
-        plt.scatter(degs, new_coords[i].tolist()[0], label='P_' + str(i))    
+        plt.scatter(degs, custom_coords[i].tolist()[0], label='P_' + str(i))    
     plt.legend()
-    fig_name = "new_basis_SDP_polynomial_coeffs_" + str(q) + "_" + str(N) + ".png"
+    fig_name = "SDP_polynomial_coeffs_" + str(q) + "_" + str(N) + "_custom_basis.png"
     plt.savefig(EXPORTS_DIR + PLOTS_EXPORT_SUBDIR + fig_name)
     
     print("Saving polynomial coefficients plot in " + EXPORTS_DIR + PLOTS_EXPORT_SUBDIR + fig_name)
