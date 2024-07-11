@@ -174,14 +174,20 @@ if args.generate_plots or not args.skip_save:
         P[i] = [tr(Q[i], j) for j in range(-N+1, N)]
 
     basis_ch_mx_chebyshev_to_custom = basis_utils.generate_basis_ch_mx_chebyshev_to_custom(N-1)
+    basis_ch_mx_chebyshev_to_hermite = basis_utils.generate_basis_ch_mx_chebyshev_to_hermite(N)
+
     custom_coords = np.matmul(P[:, N:], np.transpose(basis_ch_mx_chebyshev_to_custom))
+    hermite_coords = np.matmul(P[:, (N-1):], np.transpose(basis_ch_mx_chebyshev_to_hermite))
 
 if not args.skip_save:
     txt_file_name = "polynomial_coeffs_" + str(q) + "_" + str(N) + ".txt"
-    txt_file_name_new_basis = "polynomial_coeffs_" + str(q) + "_" + str(N) + "_custom_basis.txt"
+    txt_file_name_custom_basis = "polynomial_coeffs_" + str(q) + "_" + str(N) + "_custom_basis.txt"
+    txt_file_name_hermite_basis = "polynomial_coeffs_" + str(q) + "_" + str(N) + "_hermite_basis.txt"
+
     makedirs(EXPORTS_DIR + COEFFS_EXPORT_SUBDIR, exist_ok=True)
     np.savetxt(EXPORTS_DIR + COEFFS_EXPORT_SUBDIR + txt_file_name, P[:, (N-1):], fmt="%+1.3f")
-    np.savetxt(EXPORTS_DIR + COEFFS_EXPORT_SUBDIR + txt_file_name_new_basis, custom_coords, fmt="%+1.4f,")
+    np.savetxt(EXPORTS_DIR + COEFFS_EXPORT_SUBDIR + txt_file_name_custom_basis, custom_coords, fmt="%+1.4f,")
+    np.savetxt(EXPORTS_DIR + COEFFS_EXPORT_SUBDIR + txt_file_name_hermite_basis, hermite_coords, fmt="%+1.6f,")
 
 if args.generate_plots:
     makedirs(EXPORTS_DIR + PLOTS_EXPORT_SUBDIR, exist_ok=True)
@@ -208,12 +214,21 @@ if args.generate_plots:
     plt.savefig(EXPORTS_DIR + PLOTS_EXPORT_SUBDIR + fig_name)
     plt.clf()
 
-    # Plot the solution polynomial coefficients in new basis 
+    # Plot the solution polynomial coefficients in custom basis 
     degs = np.arange(1, N)
     for i in range(q+1):
-        plt.scatter(degs, custom_coords[i].tolist()[0], label='P_' + str(i))    
+        plt.scatter(degs, custom_coords[i], label='P_' + str(i))    
     plt.legend()
     fig_name = "SDP_polynomial_coeffs_" + str(q) + "_" + str(N) + "_custom_basis.png"
+    plt.savefig(EXPORTS_DIR + PLOTS_EXPORT_SUBDIR + fig_name)
+    plt.clf()
+
+        # Plot the solution polynomial coefficients in Hermite basis 
+    degs = np.arange(0, N)
+    for i in range(q+1):
+        plt.scatter(degs, hermite_coords[i], label='P_' + str(i))    
+    plt.legend()
+    fig_name = "SDP_polynomial_coeffs_" + str(q) + "_" + str(N) + "_hermite_basis.png"
     plt.savefig(EXPORTS_DIR + PLOTS_EXPORT_SUBDIR + fig_name)
     
     print("Saving polynomial coefficients plot in " + EXPORTS_DIR + PLOTS_EXPORT_SUBDIR + fig_name)
