@@ -211,8 +211,8 @@ if args.generate_plots:
     makedirs(EXPORTS_DIR + PLOTS_EXPORT_SUBDIR, exist_ok=True)
     # Plot the solution polynomials
     thetas = np.linspace(0, 2 * np.pi/20, N * 6 + 100)
-    for i in range(1, q + 1):
-        plt.plot(thetas, poly_val(P[i]-P[i-1], np.exp(1j * thetas)), label='D_' + str(i) + ' = P_' + str(i) + " - P_" + str(i-1))
+    for i in range(0, q + 1):
+        plt.plot(thetas, poly_val(P[i], np.exp(1j * thetas)), label='D_' + str(i) + ' = P_' + str(i) + " - P_" + str(i-1))
     plt.legend()
     fig_name = "SDP_polynomial_values_" + str(q) + "_" + str(N) + ".png"
     # if plot_polys: TODO 
