@@ -7,6 +7,7 @@ import cvxpy as cp
 import numpy as np
 from matplotlib import pyplot as plt
 import basis_utils  
+import math 
 
 
 parser = argparse.ArgumentParser()
@@ -46,7 +47,9 @@ N = args.instance_size    # Instance size (MUST BE EVEN!!!)
 q = args.query_count      # Number of queries
 EXPORTS_DIR = "exports/"   # relative path to directory for exports
 COEFFS_EXPORT_SUBDIR = "coefficients/" 
-PLOTS_EXPORT_SUBDIR = "plots/symmetrized/" 
+PLOTS_EXPORT_SUBDIR = "plots/" 
+MATRIX_PLOTS_SUBDIR = "matrix_plots/"
+MX_EXPORT_SUBDIR = "matrices/"
 # Note that plots will always be saved, flags determined if they are shown
 
 print("Invoked with size params " + str(q) + " " + str(N) + ".")
@@ -57,24 +60,15 @@ print("Running solve " + str(rep_count) + " time(s).")
 ################ Subroutine Definitions ####################
 ############################################################
 
-# Trace of the off-diagonal elements of a matrix
-# In particular, the i-th super-diagonal (or -i-th sub-diagonal) elements are summed
-def tr(M, i):
-    N = M.shape[0]
-    if i > 0:
-        return np.sum([M[j, j+i] for j in range(N-i)])
-    elif i < 0:
-        return np.sum([M[j-i, j] for j in range(N+i)])
-    else:
-        return np.trace(M)
-    
-
 Rs = [np.identity(N)] 
 for i in range(0, N-1):
     Rs += [np.tril(np.roll(Rs[i], -1, axis=1))]
 
-def my_tr(M, i):
+def cp_tr(M, i):
     return cp.trace(Rs[i] @ M)
+
+def my_tr(M, i):
+    return np.trace(Rs[i] @ M)
 
 # Returns a list of values of symmetric laurent polynomial, assumes length of P is odd
 def poly_val(P, xs):
@@ -93,6 +87,7 @@ I = np.eye(N // 2)
 J = np.fliplr(I)
 E = np.ones((N // 2, N // 2))
 A = [[] for _ in range(q + 1)]
+U = np.block([[I, I], [J, -J]])/math.sqrt(2)
 A[0] = E / N
 A[q] = I / N
 B = [[] for _ in range(q + 1)]
@@ -115,14 +110,16 @@ for i in range(1, q):
 for t in range(1, q + 1):
     Q_curr = cp.bmat([[A[t], B[t]], [J @ B[t] @ J, J @ A[t] @ J]])
     Q_prev = cp.bmat([[A[t - 1], B[t - 1]], [J @ B[t - 1] @ J, J @ A[t - 1] @ J]])
-    t_is_odd = (t % 2 == 1)
-    last_step = (t == q)
 
     constraints += [
-        my_tr(Q_curr, i) + (-1)**t * my_tr(Q_curr, N-i) == my_tr(Q_prev, i) + (-1)**t * my_tr(Q_prev, N-i) for i in range(1, N)
+        cp_tr(Q_curr, i) + (-1)**t * cp_tr(Q_curr, N-i) == cp_tr(Q_prev, i) + (-1)**t * cp_tr(Q_prev, N-i) for i in range(1, N)
         # cp.trace((Rs[i] + (-1)**t * Rs[N-i]) @ (Q_curr - Q_prev)) ==  0  for i in range(1, N) # slightly more efficient? 
-    ]
+    ] 
 
+# Q1 = cp.bmat([[A[1], B[1]], [J @ B[1] @ J, J @ A[1] @ J]])
+# constraints += [
+#     cp_tr(Q1, 20) >= -0.262291*0.3
+# ]
 
 print("Number of constraints is " + str(len(constraints)))
 
@@ -171,30 +168,41 @@ if args.generate_plots or not args.skip_save:
         # Q[i] = Q[i].value
         Q[i] = np.block([[A[i].value, B[i].value], [J @ B[i].value @ J, J @ A[i].value @ J]])
     for i in range(q + 1):
-        P[i] = [tr(Q[i], j) for j in range(-N+1, N)]
+        P[i,(N-1):]= [my_tr(Q[i], j) for j in range(0, N)]
 
-    basis_ch_mx_chebyshev_to_custom = basis_utils.generate_basis_ch_mx_chebyshev_to_custom(N-1)
+    basis_ch_mx_chebyshev_to_custom = np.linalg.inv(basis_utils.generate_basis_ch_mx_custom_to_chebyshev(N-1))
+    basis_ch_mx_chebyshev_to_kernels = np.linalg.inv(basis_utils.generate_basis_ch_mx_kernels_to_chebyshev(N))
     basis_ch_mx_chebyshev_to_hermite = basis_utils.generate_basis_ch_mx_chebyshev_to_hermite(N)
 
     custom_coords = np.matmul(P[:, N:], np.transpose(basis_ch_mx_chebyshev_to_custom))
+    kernel_coords = np.matmul(P[:, (N-1):], np.transpose(basis_ch_mx_chebyshev_to_kernels))
     hermite_coords = np.matmul(P[:, (N-1):], np.transpose(basis_ch_mx_chebyshev_to_hermite))
+
+makedirs(EXPORTS_DIR + MX_EXPORT_SUBDIR, exist_ok=True)
+for i in range(q+1):
+    plt.matshow(U*Q[i]*U)
+    plt.savefig(EXPORTS_DIR + PLOTS_EXPORT_SUBDIR + MATRIX_PLOTS_SUBDIR + "q" + str(q) + "_N" + str(N) + "_Q" + str(i) + ".png")
+    np.savetxt(EXPORTS_DIR + MX_EXPORT_SUBDIR + "q" + str(q) + "_N" + str(N) + "_Q" + str(i) + ".txt", Q[i], fmt="%+1.3f")
+    plt.clf()
 
 if not args.skip_save:
     txt_file_name = "polynomial_coeffs_" + str(q) + "_" + str(N) + ".txt"
     txt_file_name_custom_basis = "polynomial_coeffs_" + str(q) + "_" + str(N) + "_custom_basis.txt"
+    txt_file_name_kernels_basis = "polynomial_coeffs_" + str(q) + "_" + str(N) + "_kernels_basis.txt"
     txt_file_name_hermite_basis = "polynomial_coeffs_" + str(q) + "_" + str(N) + "_hermite_basis.txt"
 
     makedirs(EXPORTS_DIR + COEFFS_EXPORT_SUBDIR, exist_ok=True)
-    np.savetxt(EXPORTS_DIR + COEFFS_EXPORT_SUBDIR + txt_file_name, P[:, (N-1):], fmt="%+1.3f")
+    np.savetxt(EXPORTS_DIR + COEFFS_EXPORT_SUBDIR + txt_file_name, P[:, (N-1):], fmt="%+1.6f")
     np.savetxt(EXPORTS_DIR + COEFFS_EXPORT_SUBDIR + txt_file_name_custom_basis, custom_coords, fmt="%+1.4f,")
+    np.savetxt(EXPORTS_DIR + COEFFS_EXPORT_SUBDIR + txt_file_name_kernels_basis, np.transpose(kernel_coords), fmt="%+1.3f,")
     np.savetxt(EXPORTS_DIR + COEFFS_EXPORT_SUBDIR + txt_file_name_hermite_basis, hermite_coords, fmt="%+1.6f,")
 
 if args.generate_plots:
     makedirs(EXPORTS_DIR + PLOTS_EXPORT_SUBDIR, exist_ok=True)
     # Plot the solution polynomials
-    thetas = np.linspace(0, 2 * np.pi, N * 6 + 100)
-    for i in range(q + 1):
-        plt.plot(thetas, poly_val(P[i], np.exp(1j * thetas)), label='P_' + str(i))
+    thetas = np.linspace(0, 2 * np.pi/20, N * 6 + 100)
+    for i in range(1, q + 1):
+        plt.plot(thetas, poly_val(P[i]-P[i-1], np.exp(1j * thetas)), label='D_' + str(i) + ' = P_' + str(i) + " - P_" + str(i-1))
     plt.legend()
     fig_name = "SDP_polynomial_values_" + str(q) + "_" + str(N) + ".png"
     # if plot_polys: TODO 
@@ -204,9 +212,9 @@ if args.generate_plots:
     plt.clf()
 
     # Plot the solution polynomial coefficients
-    degs = np.arange(-N+1, N)
-    for i in range(q+1):
-        plt.scatter(degs, P[i], label='P_' + str(i))
+    degs = np.arange(0, N)
+    for i in range(0,q+1):
+        plt.plot(degs, P[i,(N-1):], label='P_' + str(i))
     plt.legend()
     fig_name = "SDP_polynomial_coeffs_" + str(q) + "_" + str(N) + ".png"
     # if plot_poly_coeffs: TODO 
@@ -223,10 +231,19 @@ if args.generate_plots:
     plt.savefig(EXPORTS_DIR + PLOTS_EXPORT_SUBDIR + fig_name)
     plt.clf()
 
-        # Plot the solution polynomial coefficients in Hermite basis 
+    # Plot the solution polynomial coefficients in Hermite basis 
     degs = np.arange(0, N)
     for i in range(q+1):
-        plt.scatter(degs, hermite_coords[i], label='P_' + str(i))    
+        plt.scatter(degs, kernel_coords[i], label='P_' + str(i))    
+    plt.legend()
+    fig_name = "SDP_polynomial_coeffs_" + str(q) + "_" + str(N) + "_kernels_basis.png"
+    plt.savefig(EXPORTS_DIR + PLOTS_EXPORT_SUBDIR + fig_name)
+    plt.clf()
+
+    # Plot the solution polynomial coefficients in Hermite basis 
+    degs = np.arange(0, N)
+    for i in range(q+1):
+        plt.plot(degs, hermite_coords[i], label='P_' + str(i))    
     plt.legend()
     fig_name = "SDP_polynomial_coeffs_" + str(q) + "_" + str(N) + "_hermite_basis.png"
     plt.savefig(EXPORTS_DIR + PLOTS_EXPORT_SUBDIR + fig_name)
