@@ -193,6 +193,7 @@ for i in range(q+1):
 
 for i in range(q+1):
     mx = trig_utils.laurent_poly_to_toeplitz_mx(P[i])
+    print(np.linalg.eigvals(mx))
     np.savetxt(EXPORTS_DIR + MX_EXPORT_SUBDIR + "q" + str(q) + "_N" + str(N) + "_Toeplitz_Q" + str(i) + ".txt", mx, fmt="%+1.3f")
 
 if not args.skip_save:
@@ -210,7 +211,7 @@ if not args.skip_save:
 if args.generate_plots:
     makedirs(EXPORTS_DIR + PLOTS_EXPORT_SUBDIR, exist_ok=True)
     # Plot the solution polynomials
-    thetas = np.linspace(0, 2 * np.pi/20, N * 6 + 100)
+    thetas = np.linspace(0, 2*np.pi, 2*N+1)
     for i in range(0, q + 1):
         plt.plot(thetas, poly_val(P[i], np.exp(1j * thetas)), label='D_' + str(i) + ' = P_' + str(i) + " - P_" + str(i-1))
     plt.legend()
