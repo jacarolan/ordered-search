@@ -1,13 +1,16 @@
 # Import packages.
 import argparse
 import timeit
-from os import makedirs
+import math 
 import os.path
+from os import makedirs
+
 import cvxpy as cp
 import numpy as np
 from matplotlib import pyplot as plt
+
 import basis_utils  
-import math 
+import trig_utils
 
 
 parser = argparse.ArgumentParser()
@@ -168,7 +171,8 @@ if args.generate_plots or not args.skip_save:
         # Q[i] = Q[i].value
         Q[i] = np.block([[A[i].value, B[i].value], [J @ B[i].value @ J, J @ A[i].value @ J]])
     for i in range(q + 1):
-        P[i,(N-1):]= [my_tr(Q[i], j) for j in range(0, N)]
+        P[i, (N-1):] = [my_tr(Q[i], j) for j in range(0, N)]
+        P[i, :(N-1)] = P[i, N:]
 
     basis_ch_mx_chebyshev_to_custom = np.linalg.inv(basis_utils.generate_basis_ch_mx_custom_to_chebyshev(N-1))
     basis_ch_mx_chebyshev_to_kernels = np.linalg.inv(basis_utils.generate_basis_ch_mx_kernels_to_chebyshev(N))
@@ -182,8 +186,15 @@ makedirs(EXPORTS_DIR + MX_EXPORT_SUBDIR, exist_ok=True)
 for i in range(q+1):
     plt.matshow(U*Q[i]*U)
     plt.savefig(EXPORTS_DIR + PLOTS_EXPORT_SUBDIR + MATRIX_PLOTS_SUBDIR + "q" + str(q) + "_N" + str(N) + "_Q" + str(i) + ".png")
-    np.savetxt(EXPORTS_DIR + MX_EXPORT_SUBDIR + "q" + str(q) + "_N" + str(N) + "_Q" + str(i) + ".txt", Q[i], fmt="%+1.3f")
     plt.clf()
+
+for i in range(q+1):
+    np.savetxt(EXPORTS_DIR + MX_EXPORT_SUBDIR + "q" + str(q) + "_N" + str(N) + "_Q" + str(i) + ".txt", Q[i], fmt="%+1.3f")
+
+for i in range(q+1):
+    mx = trig_utils.laurent_poly_to_toeplitz_mx(P[i])
+    print(np.linalg.eigvals(mx))
+    np.savetxt(EXPORTS_DIR + MX_EXPORT_SUBDIR + "q" + str(q) + "_N" + str(N) + "_Toeplitz_Q" + str(i) + ".txt", mx, fmt="%+1.3f")
 
 if not args.skip_save:
     txt_file_name = "polynomial_coeffs_" + str(q) + "_" + str(N) + ".txt"
