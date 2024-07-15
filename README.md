@@ -1,1 +1,1 @@
-Run `python3 sdp-solver-symmetrized.py --help` for help on how to use the solver.
+Run `python3 solve_sdp.py --help` for help on how to use the solver.
