@@ -131,7 +131,7 @@ prob = cp.Problem(cp.Minimize(0),
                   constraints)
 def solve():
     prob._cache.param_prog = None
-    prob.solve(eps=epsilon, solver=solver, verbose=True)
+    prob.solve(eps=epsilon, solver=solver, verbose=False)
 
 elapsed = timeit.timeit("solve()", globals=globals(), number=rep_count)
 print("Finished. Time elapsed: " + str(round(elapsed, 2)))
@@ -172,7 +172,7 @@ if args.generate_plots or not args.skip_save:
         Q[i] = np.block([[A[i].value, B[i].value], [J @ B[i].value @ J, J @ A[i].value @ J]])
     for i in range(q + 1):
         P[i, (N-1):] = [my_tr(Q[i], j) for j in range(0, N)]
-        P[i, :(N-1)] = P[i, N:]
+        P[i, :(N-1)] = np.flip(P[i, N:])
 
     basis_ch_mx_chebyshev_to_custom = np.linalg.inv(basis_utils.generate_basis_ch_mx_custom_to_chebyshev(N-1))
     basis_ch_mx_chebyshev_to_kernels = np.linalg.inv(basis_utils.generate_basis_ch_mx_kernels_to_chebyshev(N))
@@ -193,7 +193,6 @@ for i in range(q+1):
 
 for i in range(q+1):
     mx = trig_utils.laurent_poly_to_toeplitz_mx(P[i])
-    print(np.linalg.eigvals(mx))
     np.savetxt(EXPORTS_DIR + MX_EXPORT_SUBDIR + "q" + str(q) + "_N" + str(N) + "_Toeplitz_Q" + str(i) + ".txt", mx, fmt="%+1.3f")
 
 if not args.skip_save:
@@ -205,7 +204,7 @@ if not args.skip_save:
     makedirs(EXPORTS_DIR + COEFFS_EXPORT_SUBDIR, exist_ok=True)
     np.savetxt(EXPORTS_DIR + COEFFS_EXPORT_SUBDIR + txt_file_name, P[:, (N-1):], fmt="%+1.6f")
     np.savetxt(EXPORTS_DIR + COEFFS_EXPORT_SUBDIR + txt_file_name_custom_basis, custom_coords, fmt="%+1.4f,")
-    np.savetxt(EXPORTS_DIR + COEFFS_EXPORT_SUBDIR + txt_file_name_kernels_basis, np.transpose(kernel_coords), fmt="%+1.3f,")
+    np.savetxt(EXPORTS_DIR + COEFFS_EXPORT_SUBDIR + txt_file_name_kernels_basis, np.transpose(kernel_coords), fmt="%+1.6f,")
     np.savetxt(EXPORTS_DIR + COEFFS_EXPORT_SUBDIR + txt_file_name_hermite_basis, hermite_coords, fmt="%+1.6f,")
 
 if args.generate_plots:
