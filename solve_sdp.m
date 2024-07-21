@@ -3,7 +3,7 @@ yalmip('clear')
 USE_NEW_CONSTRAINTS = false;
 
 q = 5;
-N = 200;
+N = 50;
 
 m = N/2;
 I = eye(m);
@@ -91,6 +91,7 @@ hold on;
 for t = 2:q
     Q_curr = value(Qs(t));
     [U,S,V] = svd(Q_curr);
-    plot(1:N, U(:,1));
+    plot(1:N, U(:,1), 'DisplayName', ['p_' num2str(t-1)]);
 end
+legend()
 hold off; 
