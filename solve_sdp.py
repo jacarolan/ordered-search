@@ -74,12 +74,16 @@ def my_tr(M, i):
     return np.trace(Rs[i] @ M)
 
 # Returns a list of values of symmetric laurent polynomial, assumes length of P is odd
-def poly_val(P, xs):
+def eval_on_grid(P, thetas):
     d = len(P)
     mid_d = (d-1) // 2
     vals = []
-    for x in xs:
-        vals += [sum([P[i] * x**(i-mid_d) for i in range(d)])]
+    for i in range(d):
+        print(P[i])
+    print(P)
+    print("\n")
+    for theta in thetas:
+        vals += [sum([P[i] * math.cos(theta*(i-mid_d)) for i in range(d)])]
     return np.array(vals)
     
 
@@ -191,10 +195,21 @@ for i in range(q+1):
 for i in range(q+1):
     np.savetxt(EXPORTS_DIR + MX_EXPORT_SUBDIR + "q" + str(q) + "_N" + str(N) + "_Q" + str(i) + ".txt", Q[i], fmt="%+1.3f")
 
-for i in range(q+1):
-    mx = trig_utils.laurent_poly_to_toeplitz_mx(P[i])
-    print(np.linalg.eigvals(mx))
-    np.savetxt(EXPORTS_DIR + MX_EXPORT_SUBDIR + "q" + str(q) + "_N" + str(N) + "_Toeplitz_Q" + str(i) + ".txt", mx, fmt="%+1.3f")
+toep_mxs = []
+circ_mxs = [] 
+circ_diff_mxs = []
+circ_mxs_signed = []
+for j in range(0,q+1):
+    toep_mxs += [trig_utils.laurent_poly_to_toeplitz_mx(P[j])]
+    circ_mxs += [trig_utils.laurent_poly_to_circulant_mx(P[j])] 
+    circ_mxs_signed += [trig_utils.laurent_poly_to_circulant_mx_signed(P[j])]
+    # if (j > 0):
+    #     circ_diff_mxs += [trig_utils.laurent_poly_to_circulant_mx(P[j]-P[j-1])]
+    #     np.savetxt(EXPORTS_DIR + MX_EXPORT_SUBDIR + "q" + str(q) + "_N" + str(N) + "_Circulant_Diff_Q" + str(j) + ".txt", circ_diff_mxs[-1], fmt="%+1.3f")    
+
+    np.savetxt(EXPORTS_DIR + MX_EXPORT_SUBDIR + "q" + str(q) + "_N" + str(N) + "_Toeplitz_Q" + str(j) + ".txt", toep_mxs[-1], fmt="%+1.3f")
+    np.savetxt(EXPORTS_DIR + MX_EXPORT_SUBDIR + "q" + str(q) + "_N" + str(N) + "_Circulant_Q" + str(j) + ".txt", circ_mxs[-1], fmt="%+1.3f")
+    np.savetxt(EXPORTS_DIR + MX_EXPORT_SUBDIR + "q" + str(q) + "_N" + str(N) + "_Circulant_Signed_Q" + str(j) + ".txt", circ_mxs_signed[-1], fmt="%+1.3f")
 
 if not args.skip_save:
     txt_file_name = "polynomial_coeffs_" + str(q) + "_" + str(N) + ".txt"
@@ -211,9 +226,10 @@ if not args.skip_save:
 if args.generate_plots:
     makedirs(EXPORTS_DIR + PLOTS_EXPORT_SUBDIR, exist_ok=True)
     # Plot the solution polynomials
-    thetas = np.linspace(0, 2*np.pi, 2*N+1)
+    thetas = np.linspace(-np.pi, np.pi, 2*N+1+100)
     for i in range(0, q + 1):
-        plt.plot(thetas, poly_val(P[i], np.exp(1j * thetas)), label='D_' + str(i) + ' = P_' + str(i) + " - P_" + str(i-1))
+        plt.plot(thetas, np.round(eval_on_grid(P[i], thetas), 4), label='P_' + str(i))
+        # print(np.round(eval_on_grid(P[i], thetas), 4)) 
     plt.legend()
     fig_name = "SDP_polynomial_values_" + str(q) + "_" + str(N) + ".png"
     # if plot_polys: TODO 
