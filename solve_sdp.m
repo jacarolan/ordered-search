@@ -3,7 +3,7 @@ yalmip('clear')
 USE_NEW_CONSTRAINTS = false;
 
 q = 5;
-N = 300;
+N = 200;
 
 m = N/2;
 I = eye(m);
@@ -24,11 +24,13 @@ tr = @(M, i) trace(Rs(:,:,i) * M);
 tr_conj = @(M, i) trace(Rconjs(:,:,i) * M);
 
 % Setting up the SDP
+Obj_to_maximize = 0;
 Cs = sdpvar(m, m, q+1); % C_i = (A_i + B_i * J) / 2
 Ds = sdpvar(m, m, q+1); % D_i = (A_i - B_i * J) / 2
 
 As = @(i) (Cs(:, :, i) + Ds(:, :, i)); % A_i = C_i + D_i 
 Bs = @(i) (Cs(:, :, i) - Ds(:, :, i))*J; % B_i = (C_i - D_i) * J
+Qs = @(i) [As(i), Bs(i); J * Bs(i) * J, J * As(i) * J]; % B_i = (C_i - D_i) * J
 
 Constraints = [
     Cs(:, :, 1) == 1/(2*N) * E * (I + J),...
@@ -42,6 +44,7 @@ Constraints = [
 ];
 
 for t=1:q+1
+    Obj_to_maximize = Obj_to_maximize + Cs(1,1,t) + Ds(1,1,t);
     Constraints = [Constraints,...
         trace(As(t)) == 1/2,... % should try to vectorize
         Cs(:, :, t) >= 0,...
@@ -78,17 +81,16 @@ for t = 2:(q+1)
     end
 end 
 
-
-Objective = 1;
-
 options = sdpsettings('verbose', 1, 'solver', 'MOSEK');
 
-optimize(Constraints, Objective, options)
+optimize(Constraints, -Obj_to_maximize, options)
 
-% Avals = value(As);
-% Bvals = value(Bs);
-% 
-% for t = 2:(q+1)
-%     Q_curr = [Avals(:,:,t), Bvals(:,:,t); J * Bvals(:,:,t) * J, J * Avals(:,:,t) * J];
-%     display(eig(Q_curr));
-% end
+
+
+hold on;
+for t = 2:q
+    Q_curr = value(Qs(t));
+    [U,S,V] = svd(Q_curr);
+    plot(1:N, U(:,1));
+end
+hold off; 
