@@ -41,7 +41,7 @@ if args.repeats != None:
     rep_count = args.repeats
 
 
-epsilon = 1e-8            # Solver precision (default is not high enough)
+epsilon = 1e-9            # Solver precision (default is not high enough)
 if args.accuracy != None:
     epsilon = 1/10**args.accuracy
 
@@ -83,13 +83,6 @@ def eval_on_grid(coords, thetas):
 ###################### SDP Solving #########################
 ############################################################
 m = N // 2
-I = np.eye(m)
-J = np.fliplr(I)
-E = np.ones((m, m))
-Q = [[] for _ in range(q + 1)]
-S = [[] for _ in range(q + 1)]
-U = np.block([[I, I], [J, -J]])/math.sqrt(2)
-
 
 Polys = [GramPairRep(N) for _ in range(q+1)]
 
