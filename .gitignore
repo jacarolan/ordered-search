@@ -1,4 +1,5 @@
 Plots/
 .DS_Store
 *.txt
+*.png
 exports/
