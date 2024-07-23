@@ -11,7 +11,7 @@ from matplotlib import pyplot as plt
 
 import basis_utils  
 import trig_utils
-from gram_pair_utils import GramPairRep
+from gram_pair_utils import GramPairRep, MaskMatrixFactory
 from pos_poly_utils import extract_first_eigenvector
 
 
@@ -24,9 +24,6 @@ parser.add_argument("--accuracy", help="Enter an integer m for 1e-m accuracy.", 
 parser.add_argument("--skip-save", help="Add flag to skip saving solutions to disk.", action='store_true')
 parser.add_argument("--generate-plots", help="Add flag to generate plots.", action='store_true')
 args = parser.parse_args()
-
-if args.instance_size % 2 != 0:
-    raise ValueError("This program requires the instance size to be even.")
 
 solver = None
 if args.solver == "CVXOPT":
@@ -41,7 +38,7 @@ if args.repeats != None:
     rep_count = args.repeats
 
 
-epsilon = 1e-9            # Solver precision (default is not high enough)
+epsilon = 1e-8            # Solver precision (default is not high enough)
 if args.accuracy != None:
     epsilon = 1/10**args.accuracy
 
@@ -50,7 +47,7 @@ if args.accuracy != None:
 # THIS CODE ASSUMES EVEN N!!!
 N = args.instance_size    # Instance size (MUST BE EVEN!!!)
 q = args.query_count      # Number of queries
-EXPORTS_DIR = "exports/"   # relative path to directory for exports
+EXPORTS_DIR = "exports/gram_pair/"   # relative path to directory for exports
 COEFFS_EXPORT_SUBDIR = "coefficients/" 
 PLOTS_EXPORT_SUBDIR = "plots/" 
 MATRIX_PLOTS_SUBDIR = "matrix_plots/"
@@ -60,16 +57,6 @@ MX_EXPORT_SUBDIR = "matrices/"
 print("Invoked with size params " + str(q) + " " + str(N) + ".")
 print("Using solver " + str(solver) + ".")
 print("Running solve " + str(rep_count) + " time(s).")
-
-############################################################
-################ Subroutine Definitions ####################
-############################################################
-
-def cp_tr(M, i):
-    return cp.trace(Rs[i] @ M)
-
-def my_tr(M, i):
-    return np.trace(Rs[i] @ M)
 
 # Returns a list of values of symmetric laurent polynomial, assumes length of P is odd
 def eval_on_grid(coords, thetas):
@@ -82,9 +69,10 @@ def eval_on_grid(coords, thetas):
 ############################################################
 ###################### SDP Solving #########################
 ############################################################
-m = N // 2
+mask_factory = MaskMatrixFactory()
 
-Polys = [GramPairRep(N) for _ in range(q+1)]
+
+Polys = [GramPairRep(N-1, mask_factory) for _ in range(q+1)]
 
 constraints = []
 for j in range(q+1):
@@ -142,78 +130,21 @@ for t in range(q+1):
     poly_coordinates += [Polys[t].get_coordinate_vector(False)]
 
 
-# Plot the solution polynomial coefficients
-degs = np.arange(0, N)
-for t in range(0, q+1):
-    plt.plot(degs, poly_coordinates[t], label='q_' + str(t))
-plt.legend()
-fig_name = "GramPair_poly_coeffs_" + str(q) + "_" + str(N) + ".png"
-#plt.savefig(EXPORTS_DIR + PLOTS_EXPORT_SUBDIR + fig_name)
-plt.savefig(fig_name)
-plt.clf()
+if args.generate_plots:
+    # Plot the solution polynomial coefficients
+    degs = np.arange(0, N)
+    for t in range(0, q+1):
+        plt.plot(degs, poly_coordinates[t], label='q_' + str(t))
+    plt.legend()
+    fig_name = "poly_coeffs_" + str(q) + "_" + str(N) + ".png"
+    plt.savefig(EXPORTS_DIR + PLOTS_EXPORT_SUBDIR + fig_name)
+    plt.clf()
 
-# Plot the solution polynomials
-thetas = np.linspace(-np.pi, np.pi, 2*N+1+100)
-for t in range(0, q + 1):
-    plt.plot(thetas, np.round(eval_on_grid(poly_coordinates[t], thetas), 4), label='q_' + str(t))
-plt.legend()
-fig_name = "GramPair_poly_values_" + str(q) + "_" + str(N) + ".png"
-plt.savefig(fig_name)
-plt.clf()
-
-# if args.generate_plots or not args.skip_save:
-#     Q = [[] for _ in range(q + 1)]
-#     Q[0] = np.ones((N, N)) / N
-#     Q[q] = np.eye(N, N) / N
-
-#     # Compute the solution polynomials
-#     q_polys = np.empty([q+1, 2*(N-1)+1])
-#     p_polys = np.empty([q+1, N])
-#     for i in range(1, q):
-#         Q[i] = np.block([[A[i].value, B[i].value], [J @ B[i].value @ J, J @ A[i].value @ J]])
-#         print(np.linalg.matrix_rank(Q[i]))
-
-#     for i in range(q + 1):
-#         q_polys[i, (N-1):] = [my_tr(Q[i], j) for j in range(0, N)]
-#         q_polys[i, :(N-1)] = np.flip(q_polys[i, N:])
-
-#     for i in range(q+1):
-#         p_polys[i] = extract_first_eigenvector(Q[i])
-#     p_polys[0] = -p_polys[0]
-
-
-# makedirs(EXPORTS_DIR + MX_EXPORT_SUBDIR, exist_ok=True)
-# for i in range(q+1):
-#     plt.matshow(U*Q[i]*U)
-#     plt.savefig(EXPORTS_DIR + PLOTS_EXPORT_SUBDIR + MATRIX_PLOTS_SUBDIR + "q" + str(q) + "_N" + str(N) + "_Q" + str(i) + ".png")
-#     plt.clf()
-
-# for i in range(q+1):
-#     np.savetxt(EXPORTS_DIR + MX_EXPORT_SUBDIR + "q" + str(q) + "_N" + str(N) + "_Q" + str(i) + ".txt", Q[i], fmt="%+1.3f")
-
-
-# if not args.skip_save:
-#     txt_file_name = "polynomial_coeffs_" + str(q) + "_" + str(N) + ".txt"
- 
-#     makedirs(EXPORTS_DIR + COEFFS_EXPORT_SUBDIR, exist_ok=True)
-#     np.savetxt(EXPORTS_DIR + COEFFS_EXPORT_SUBDIR + txt_file_name, q_polys[:, (N-1):], fmt="%+1.6f")
-
-# if args.generate_plots:
-#     makedirs(EXPORTS_DIR + PLOTS_EXPORT_SUBDIR, exist_ok=True)
-#     # Plot the solution polynomials
-#     thetas = np.linspace(-np.pi, np.pi, 2*N+1+100)
-#     for i in range(0, q + 1):
-#         plt.plot(thetas, np.round(eval_on_grid(q_polys[i], thetas), 4), label='q_' + str(i))
-#     plt.legend()
-#     fig_name = "SDP_polynomial_values_" + str(q) + "_" + str(N) + ".png"
-#     plt.savefig(EXPORTS_DIR + PLOTS_EXPORT_SUBDIR + fig_name)
-#     plt.clf()
-
-#     # Plot the solution polynomial coefficients
-#     degs = np.arange(0, N)
-#     for i in range(0,q+1):
-#         plt.plot(degs, q_polys[i,(N-1):], label='q_' + str(i))
-#     plt.legend()
-#     fig_name = "SDP_polynomial_coeffs_" + str(q) + "_" + str(N) + ".png"
-#     plt.savefig(EXPORTS_DIR + PLOTS_EXPORT_SUBDIR + fig_name)
-#     plt.clf()
+    # Plot the solution polynomials
+    thetas = np.linspace(-np.pi, np.pi, 2*N+1+100)
+    for t in range(0, q + 1):
+        plt.plot(thetas, np.round(eval_on_grid(poly_coordinates[t], thetas), 4), label='q_' + str(t))
+    plt.legend()
+    fig_name = "poly_values_" + str(q) + "_" + str(N) + ".png"
+    plt.savefig(EXPORTS_DIR + PLOTS_EXPORT_SUBDIR + fig_name)
+    plt.clf()

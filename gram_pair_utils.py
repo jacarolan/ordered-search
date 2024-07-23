@@ -1,74 +1,176 @@
 import numpy as np
 import cvxpy as cp
 
-def generate_theta_mxs(n):
-    Thetas = [np.identity(n)] 
-    for i in range(0, n-1):
-        Thetas += [np.triu(np.roll(Thetas[i], +1, axis=1))]
-    return Thetas
+class MaskMatrixFactory:
+    def __init__(self):
+        self._Thetas = {}
+        self._Gammas = {}
+        self._Phis_even_rules = {}
+        self._Phis_odd_rules = {}
+        self._Lambdas_even_rules = {}
+        self._Lambdas_odd_rules = {}
 
 
 
-def generate_gamma_mxs(n, Thetas = None):
-    if Thetas == None:
-        Thetas = generate_theta_mxs(n)
-    Gammas = np.transpose(Thetas)
-    return np.vstack((Gammas, np.flip(Gammas)[1:]))
+
+    def get_thetas(self, n): 
+        if n not in self._Thetas:
+            self._Thetas[n] = self._generate_theta_mxs(n)
+        return self._Thetas[n]
 
 
 
-def generate_phi_mxs(n, Thetas = None, Gammas = None):
-    if Thetas == None or Gammas == None:
-        Thetas = generate_theta_mxs(n)
-        Gammas = generate_gamma_mxs(n, Thetas)
-
-    Phi_zero = 1/2*(Gammas[0] + np.eye(n))
-    Phis = [Phi_zero]
-    Phis += [1/4*(Gammas[k] + Thetas[k] + np.flip(Thetas[k])) for k in range(1, n)]
-    Phis = np.vstack((Phis, 1/4*Gammas[n:]))
-
-    return (Phis, Thetas, Gammas)
-
-
-
-def generate_lambda_mxs(n, Thetas = None, Gammas = None):
-    if Thetas == None or Gammas == None:
-        Thetas = generate_theta_mxs(n)
-        Gammas = generate_gamma_mxs(n, Thetas)
-
-    Lambda_nil = 1/2*np.eye(n)
-    Lambda_one = 1/4*(Thetas[1] + np.flip(Thetas[1]))
-
-    Lambdas = [Lambda_nil, Lambda_one]
-    Lambdas += [1/4*(-Gammas[k-2] + Thetas[k] + np.flip(Thetas[k])) for k in range(2, n)]
-    Lambdas = np.vstack((Lambdas, -1/4*Gammas[(n-2):]))
+    def get_gammas(self, n):
+        if n not in self._Gammas:
+            self._Gammas[n] = self._generate_gamma_mxs(n)
+        return self._Gammas[n]
     
-    return (Lambdas, Thetas, Gammas)
+
+
+    def get_phis(self, n, use_odd_rules):
+        if use_odd_rules:
+            return self._get_phis_use_odd_rules(n)
+        else:
+            return self._get_phis_use_even_rules(n)
+
+
+
+    def get_lambdas(self, n, use_odd_rules):
+        if use_odd_rules:
+            return self._get_lambdas_use_odd_rules(n)
+        else:
+            return self._get_lambdas_use_even_rules(n)
+
+
+
+    def _get_phis_use_odd_rules(self, n):
+        if n not in self._Phis_odd_rules: 
+            self._Phis_odd_rules[n] = self._generate_phi_mxs_use_odd_rules(n)
+        return self._Phis_odd_rules[n]
+
+    
+
+    def _get_phis_use_even_rules(self, n):
+        if n not in self._Phis_even_rules: 
+            self._Phis_even_rules[n] = self._generate_phi_mxs_use_even_rules(n)
+        return self._Phis_even_rules[n]
+
+
+
+    def _get_lambdas_use_odd_rules(self, n):
+        if n not in self._Lambdas_odd_rules: 
+            self._Lambdas_odd_rules[n] = self._generate_lambda_mxs_use_odd_rules(n)
+        return self._Lambdas_odd_rules[n]
+
+
+
+    def _get_lambdas_use_even_rules(self, n):
+        if n not in self._Lambdas_even_rules: 
+            self._Lambdas_even_rules[n] = self._generate_lambda_mxs_use_even_rules(n)
+        return self._Lambdas_even_rules[n]
+
+
+
+    def _generate_theta_mxs(self, n):
+        Thetas = [np.identity(n)] 
+        for i in range(0, n-1):
+            Thetas += [np.triu(np.roll(Thetas[i], +1, axis=1))]
+        return Thetas
+
+
+
+    def _generate_gamma_mxs(self, n):
+        Thetas = self.get_thetas(n)
+        Gammas = np.transpose(Thetas)
+        return np.vstack((Gammas, np.flip(Gammas)[1:]))
+
+
+
+    def _generate_phi_mxs_use_odd_rules(self, n):
+        Thetas = self.get_thetas(n)
+        Gammas = self.get_gammas(n)
+
+        Phi_nil = 1/4 * (Thetas[0] + np.flip(Thetas[0]))
+        Phis = [Phi_nil]
+        Phis += [1/4 * (Gammas[k-1] + Thetas[k] + np.flip(Thetas[k])) for k in range(1, n)]
+        Phis = np.vstack((Phis, 1/4 * Gammas[(n-1):]))
+
+        return Phis
+
+
+
+    def _generate_phi_mxs_use_even_rules(self, n):
+        Thetas = self.get_thetas(n)
+        Gammas = self.get_gammas(n)
+
+        Phi_nil = 1/2*(Gammas[0] + np.eye(n))
+        Phis = [Phi_nil]
+        Phis += [1/4*(Gammas[k] + Thetas[k] + np.flip(Thetas[k])) for k in range(1, n)]
+        Phis = np.vstack((Phis, 1/4*Gammas[n:]))
+
+        return Phis
+
+
+
+    def _generate_lambda_mxs_use_odd_rules(self, n):
+        Thetas = self.get_thetas(n)
+        Gammas = self.get_gammas(n)
+
+        Lambda_nil = 1/4 * (Thetas[0] + np.flip(Thetas[0]))
+
+        Lambdas = [Lambda_nil]
+        Lambdas += [1/4*(-Gammas[k-1] + Thetas[k] + np.flip(Thetas[k])) for k in range(1, n)]
+        Lambdas = np.vstack((Lambdas, -1/4*Gammas[(n-1):]))
+        
+        return Lambdas
+
+
+
+    def _generate_lambda_mxs_use_even_rules(self, n):
+        Thetas = self.get_thetas(n)
+        Gammas = self.get_gammas(n)
+
+        Lambda_nil = 1/2*np.eye(n)
+        Lambda_one = 1/4*(Thetas[1] + np.flip(Thetas[1]))
+
+        Lambdas = [Lambda_nil, Lambda_one]
+        Lambdas += [1/4*(-Gammas[k-2] + Thetas[k] + np.flip(Thetas[k])) for k in range(2, n)]
+        Lambdas = np.vstack((Lambdas, -1/4*Gammas[(n-2):]))
+        
+        return Lambdas
 
 
 class GramPairRep:
-    def __init__(self, n, Q = None, S = None):
-        if n % 2 == 1: 
-            raise ValueError("This class requires the degree to be even.")
+    def __init__(self, n: int, mask_factory: MaskMatrixFactory, Q = None, S = None):
         self._n = n
-        m = n // 2
+        self._mask_factory = mask_factory;
+        
+        self._m = n // 2
+        self._offset = (n % 2)
+
         if Q is None: 
-            self._Q = cp.Variable((m+1, m+1), symmetric=True)
+            self._Q = cp.Variable((self._m+1, self._m+1), symmetric=True)
         else: 
             self._Q = Q
         
         if S is None:
-            self._S = cp.Variable((m, m), symmetric=True)
+            self._S = cp.Variable((self._m + self._offset, self._m + self._offset), symmetric=True)
         else:
             self._S = S
-
-        (self._Phis, _, _) = generate_phi_mxs(m+1)
-        (self._Lambdas, _, _) = generate_lambda_mxs(m)
-
+      
 
 
     def __sub__(self, other):
-        return GramPairRep(self._n, self._Q - other.get_Q(), self._S - other.get_S())
+        if self._n != other.get_n(): 
+            raise ValueError("Polynomials must be of the same degree.")
+        
+        return GramPairRep(self._n, self._mask_factory, self._Q - other.get_Q(), self._S - other.get_S())
+
+
+
+    def get_n(self):
+        return self._n
+
 
 
     def get_Q(self, as_var = True):
@@ -88,15 +190,18 @@ class GramPairRep:
 
 
     def get_coord(self, k, as_var = True):
+        Phis = self._mask_factory.get_phis(self._m + 1, self._offset)
+        Lambdas = self._mask_factory.get_lambdas(self._m + self._offset, self._offset)
+        
         if as_var:
-            return cp.trace(self._Phis[k] @ self._Q) + cp.trace(self._Lambdas[k] @ self._S)
+            return cp.trace(Phis[k] @ self._Q) + cp.trace(Lambdas[k] @ self._S)
         else:
-            return np.trace(self._Phis[k] @ self._Q.value) + np.trace(self._Lambdas[k] @ self._S.value)
+            return np.trace(Phis[k] @ self._Q.value) + np.trace(Lambdas[k] @ self._S.value)
         
 
 
     def get_coordinate_vector(self, as_var = True):
-        return [self.get_coord(k, as_var) for k in range(0, self._n)] # could be optimized when as_var is false
+        return [self.get_coord(k, as_var) for k in range(0, self._n+1)] # could be optimized when as_var is false
 
     
 
