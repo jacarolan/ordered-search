@@ -1,8 +1,12 @@
 import numpy as np
 import cvxpy as cp
+import scipy.sparse as sparse
+from memory_profiler import profile
 
+
+@profile
 class MaskMatrixFactory:
-    def __init__(self):
+    def __init__(self, n):
         self._Thetas = {}
         self._Gammas = {}
         self._Phis_even_rules = {}
@@ -10,6 +14,37 @@ class MaskMatrixFactory:
         self._Lambdas_even_rules = {}
         self._Lambdas_odd_rules = {}
 
+        m = n // 2
+        offset = (n % 2)
+        self.get_phis(m + 1, offset)
+        self.get_lambdas(m + offset, offset)
+
+        # self._intify(m, offset)
+        # self._sparsify(m, offset)
+
+    def _intify(self, m, offset):
+        if offset:
+            self._Phis_odd_rules[m+1] = [mx.astype(int) for mx in self._Phis_odd_rules[m+1]]
+        else: 
+            self._Phis_even_rules[m+1] = [mx.astype(int) for mx in self._Phis_even_rules[m+1]]
+        
+        if offset:
+            self._Lambdas_odd_rules[m + offset] = [mx.astype(int) for mx in self._Lambdas_odd_rules[m + offset]]
+        else: 
+            self._Lambdas_even_rules[m + offset] = [mx.astype(int) for mx in self._Lambdas_even_rules[m + offset]]
+
+
+        
+    def _sparsify(self, m, offset):
+        if offset:
+            self._Phis_odd_rules[m+1] = [sparse.csr_matrix(mx) for mx in self._Phis_odd_rules[m+1]]
+        else: 
+            self._Phis_even_rules[m+1] = [sparse.csr_matrix(mx) for mx in self._Phis_even_rules[m+1]]
+        
+        if offset:
+            self._Lambdas_odd_rules[m + offset] = [sparse.csr_matrix(mx) for mx in self._Lambdas_odd_rules[m + offset]]
+        else: 
+            self._Lambdas_even_rules[m + offset] = [sparse.csr_matrix(mx) for mx in self._Lambdas_even_rules[m + offset]]
 
 
 
