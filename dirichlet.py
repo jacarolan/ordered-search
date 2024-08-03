@@ -110,29 +110,30 @@ phi_grids = eval(phi_grid, grid)
 
 
 
-fejer_values = eval(lambda w: fejer(N, w), grid)
-one_values = eval(lambda w: 1, grid)
+roots_of_one = np.array([tau * j for j in range(-m, m+1)]) # N elems 
+roots_of_minus_one = np.array([tau/2 + tau * j for j in range(-m, m)]) # N-1 elems
 
-idx_roots_of_one = [N-1+j for j in range(-N+1, 0, 2)] + [N-1+j for j in range(0, N, 2)]
-idx_roots_of_minus_one = [N-1+j for j in range(-N+2, 1, 2)] + [N-1+j for j in range(1, N, 2)]
+phis_at_roots_of_one = eval(phi_at, roots_of_one)
+phis_at_roots_of_minus_one = eval(phi_at, roots_of_minus_one)
 
-phis = eval(phi_at, grid)
-
+fejer_at_roots_of_minus_one = eval(lambda w: fejer(N, w), roots_of_minus_one)
+fejer_at_roots_of_one = eval(lambda w: fejer(N, w), roots_of_one)
 
 def init_constraints(N):
     Qs = [cp.Variable((N, N), symmetric=True) for _ in range(q + 1)]
     constraints = [Q >= 0 for Q in Qs]
 
-    constraints += [fejer_values[j] == quad(Qs[0], phis[j]) for j in range(len(grid))]
-    constraints += [1 == quad(Qs[q], phis[j]) for j in range(len(grid))]
+    constraints += [fejer_at_roots_of_one[j] == quad(Qs[0], phis_at_roots_of_one[j]) for j in range(N)]
+    constraints += [fejer_at_roots_of_minus_one[j] == quad(Qs[0], phis_at_roots_of_minus_one[j]) for j in range(N-1)]
+    
+    constraints += [1 == quad(Qs[q], phis_at_roots_of_one[j]) for j in range(N)]
+    constraints += [1 == quad(Qs[q], phis_at_roots_of_minus_one[j]) for j in range(N-1)]
 
     for t in range(1,q+1):
         if t % 2 == 0:
-            constraints += [quad(Qs[t], phis[N-1+j]) == quad(Qs[t-1], phis[N-1+j]) for j in range(0, N, 2)]
-            constraints += [quad(Qs[t], phis[N-1-j]) == quad(Qs[t-1], phis[N-1-j]) for j in range(0, N, 2)]
+            constraints += [quad(Qs[t], phis_at_roots_of_one[j]) == quad(Qs[t-1], phis_at_roots_of_one[j]) for j in range(N)]
         else: 
-            constraints += [quad(Qs[t], phis[N-1+j]) == quad(Qs[t-1], phis[N-1+j]) for j in range(1, N, 2)]
-            constraints += [quad(Qs[t], phis[N-1-j]) == quad(Qs[t-1], phis[N-1-j]) for j in range(1, N, 2)]
+            constraints += [quad(Qs[t], phis_at_roots_of_minus_one[j]) == quad(Qs[t-1], phis_at_roots_of_minus_one[j]) for j in range(N-1)]
 
     return (constraints, Qs)
 
@@ -152,11 +153,6 @@ print("Finished. Time elapsed: " + str(round(elapsed, 2)))
 max_memory = round(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss/10**9, 2)
 print("Maximal memory usage was " + str(max_memory) + " gigabytes")
 
-print(list(range(N)))
-print(phi_grids/tau)
-print(idx_roots_of_one)
-print(idx_roots_of_minus_one)
-
 
 if prob.status == 'infeasible':
     print(">>> SDP was INFEASIBLE <<<")
@@ -165,10 +161,24 @@ if prob.status == 'infeasible':
 
 if args.generate_plots:
     # Plot the solution polynomials
-    thetas = np.linspace(-np.pi, np.pi, 2*N+1+100)
+    thetas = np.linspace(0, np.pi/3, 2*N+1+100)
     for t in range(0, q + 1):
         Q = Qs[t].value
         plt.plot(thetas, eval_on_grid(Q, thetas), label='q_' + str(t))
+    plt.legend()
+    fig_name = "poly_values_" + str(q) + "_" + str(N) + "_zoomed.png"
+    plt.savefig(EXPORTS_DIR + PLOTS_EXPORT_SUBDIR + fig_name)
+    plt.clf()
+
+    thetas = np.linspace(-np.pi, np.pi, 2*N+1+100)
+    for t in range(0, q + 1):
+        Q = Qs[t].value
+        
+        evals = eval_on_grid(Q, thetas)
+        min = np.min(evals)
+        print(t, np.round(min, 3))
+        
+        plt.plot(thetas, evals, label='q_' + str(t))
     plt.legend()
     fig_name = "poly_values_" + str(q) + "_" + str(N) + ".png"
     plt.savefig(EXPORTS_DIR + PLOTS_EXPORT_SUBDIR + fig_name)
