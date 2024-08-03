@@ -60,9 +60,11 @@ print("Invoked with size params " + str(q) + " " + str(N) + ".")
 print("Using solver " + str(solver) + ".")
 print("Running solve " + str(rep_count) + " time(s).")
 
-# Returns a list of values of symmetric laurent polynomial, assumes length of P is odd
+# Assumes N is odd!!!!
+
+
 m = N // 2
-tau = np.pi * 2/(2*m+1)
+tau = np.pi * 2/N
 
 def eval(func, grid):
     return np.array([func(w) for w in grid])
@@ -123,17 +125,17 @@ def init_constraints(N):
     Qs = [cp.Variable((N, N), symmetric=True) for _ in range(q + 1)]
     constraints = [Q >= 0 for Q in Qs]
 
-    constraints += [fejer_at_roots_of_one[j] == quad(Qs[0], phis_at_roots_of_one[j]) for j in range(N)]
-    constraints += [fejer_at_roots_of_minus_one[j] == quad(Qs[0], phis_at_roots_of_minus_one[j]) for j in range(N-1)]
+    constraints += [fejer_at_roots_of_one[j] == quad(Qs[0], phis_at_roots_of_one[j]) for j in range(len(roots_of_one))] # 0th polynomial 
+    constraints += [fejer_at_roots_of_minus_one[j] == quad(Qs[0], phis_at_roots_of_minus_one[j]) for j in range(len(roots_of_minus_one))]
     
-    constraints += [1 == quad(Qs[q], phis_at_roots_of_one[j]) for j in range(N)]
-    constraints += [1 == quad(Qs[q], phis_at_roots_of_minus_one[j]) for j in range(N-1)]
+    constraints += [1 == quad(Qs[q], phis_at_roots_of_one[j]) for j in range(len(roots_of_one))] # qth polynomial 
+    constraints += [1 == quad(Qs[q], phis_at_roots_of_minus_one[j]) for j in range(len(roots_of_minus_one))]
 
     for t in range(1,q+1):
         if t % 2 == 0:
-            constraints += [quad(Qs[t], phis_at_roots_of_one[j]) == quad(Qs[t-1], phis_at_roots_of_one[j]) for j in range(N)]
+            constraints += [quad(Qs[t], phis_at_roots_of_one[j]) == quad(Qs[t-1], phis_at_roots_of_one[j]) for j in range(len(roots_of_one))]
         else: 
-            constraints += [quad(Qs[t], phis_at_roots_of_minus_one[j]) == quad(Qs[t-1], phis_at_roots_of_minus_one[j]) for j in range(N-1)]
+            constraints += [quad(Qs[t], phis_at_roots_of_minus_one[j]) == quad(Qs[t-1], phis_at_roots_of_minus_one[j]) for j in range(len(roots_of_minus_one))]
 
     return (constraints, Qs)
 
@@ -153,6 +155,8 @@ print("Finished. Time elapsed: " + str(round(elapsed, 2)))
 max_memory = round(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss/10**9, 2)
 print("Maximal memory usage was " + str(max_memory) + " gigabytes")
 
+print("roots of one", roots_of_one)
+print("roots of minus one", roots_of_minus_one)
 
 if prob.status == 'infeasible':
     print(">>> SDP was INFEASIBLE <<<")
@@ -161,7 +165,7 @@ if prob.status == 'infeasible':
 
 if args.generate_plots:
     # Plot the solution polynomials
-    thetas = np.linspace(0, np.pi/3, 2*N+1+100)
+    thetas = np.linspace(-np.pi/10, np.pi/10, 2*N+1+100)
     for t in range(0, q + 1):
         Q = Qs[t].value
         plt.plot(thetas, eval_on_grid(Q, thetas), label='q_' + str(t))
@@ -173,10 +177,10 @@ if args.generate_plots:
     thetas = np.linspace(-np.pi, np.pi, 2*N+1+100)
     for t in range(0, q + 1):
         Q = Qs[t].value
-        
+
         evals = eval_on_grid(Q, thetas)
         min = np.min(evals)
-        print(t, np.round(min, 3))
+        print("minimum of the", t, "th polynomial:", np.round(min, 3))
         
         plt.plot(thetas, evals, label='q_' + str(t))
     plt.legend()
